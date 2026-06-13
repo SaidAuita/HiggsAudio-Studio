@@ -304,15 +304,48 @@ CSS = """
   --neutral-200: rgba(255,255,255,0.10) !important; }
 .gradio-container .block { border-color: rgba(255,255,255,0.10) !important; }
 .gradio-container input[type=range] { accent-color: #7c3aed; }
+/* Теги-чипы: ширина по тексту, перенос, без растяжения и обрезки */
+.tagbtn { flex: 0 0 auto !important; min-width: 0 !important; width: auto !important; }
+.tagbtn button { white-space: nowrap !important; padding: 4px 12px !important; font-size: 0.82em !important; }
 """
 
-DARK_JS = """
-() => { try { const u=new URL(window.location);
-  if(u.searchParams.get('__theme')!=='dark' && !sessionStorage.getItem('_hgs_dark')){
-    sessionStorage.setItem('_hgs_dark','1');
-    u.searchParams.set('__theme','dark'); window.location.replace(u.href);
-  } } catch(e){} }
-"""
+import json as _json
+# Официальные описания тегов (bosonai/higgs-audio-v3-tts-4b) — для тултипов и легенды.
+TAG_DESC = {
+    "affection": "Теплота, нежность", "amusement": "Веселье, игривый смешок", "anger": "Гнев",
+    "arousal": "Обострённое желание", "awe": "Благоговение, восхищение", "bitterness": "Горечь",
+    "confusion": "Растерянность", "contemplation": "Задумчивость, рефлексия", "contentment": "Спокойное удовлетворение",
+    "determination": "Решимость, твёрдость", "disgust": "Отвращение", "elation": "Ликование, радость",
+    "enthusiasm": "Энтузиазм, воодушевление", "fear": "Страх", "helplessness": "Беспомощность",
+    "longing": "Тоска, томление", "pride": "Гордость, уверенность", "relief": "Облегчение",
+    "sadness": "Грусть", "shame": "Стыд", "surprise": "Удивление",
+    "speed_very_slow": "Очень медленно (≈0.65×)", "speed_slow": "Медленно (≈0.85×)",
+    "speed_fast": "Быстро (≈1.2×)", "speed_very_fast": "Очень быстро (≈1.4×)",
+    "pitch_low": "Ниже тон (≈−3 полутона)", "pitch_high": "Выше тон (≈+2.5 полутона)",
+    "expressive_high": "Выразительнее", "expressive_low": "Ровнее, монотоннее",
+    "pause": "Пауза ≈400–700 мс (по месту)", "long_pause": "Длинная пауза ≈700–1500 мс (по месту)",
+    "singing": "Пение", "shouting": "Крик, посыл голоса", "whispering": "Шёпот",
+    "cough": "Кашель (звук: кхм)", "laughter": "Смех (ха-ха)", "crying": "Плач (ыыы)",
+    "screaming": "Крик (ааа)", "burping": "Отрыжка", "humming": "Мычание (ммм)",
+    "sigh": "Вздох (эх)", "sniff": "Шмыганье носом", "sneeze": "Чихание (апчхи)",
+}
+_CAT_NAMES = {"emotion": "😊 Эмоции (в начало предложения)", "prosody": "🎵 Просодия",
+              "style": "🎭 Стиль (в начало)", "sfx": "🔊 Звуки (по месту, рядом со звукоподражанием)"}
+TAGS_LEGEND_MD = "\n\n".join(
+    f"**{_CAT_NAMES[c]}**\n" + "\n".join(f"- `<|{c}:{v}|>` — {TAG_DESC.get(v, '')}" for v in sorted(dr.WHITELIST[c]))
+    for c in ("emotion", "prosody", "style", "sfx")
+)
+DARK_JS = ("""
+() => {
+  try { const u=new URL(window.location);
+    if(u.searchParams.get('__theme')!=='dark' && !sessionStorage.getItem('_hgs_dark')){
+      sessionStorage.setItem('_hgs_dark','1'); u.searchParams.set('__theme','dark'); window.location.replace(u.href); return;
+    } } catch(e){}
+  const TD = __TAGDESC__;
+  const apply = () => document.querySelectorAll('button').forEach(b => { const t=(b.textContent||'').trim(); if(TD[t]) b.title = TD[t]; });
+  apply(); setInterval(apply, 1200);
+}
+""").replace("__TAGDESC__", _json.dumps(TAG_DESC, ensure_ascii=False))
 
 TTS_EXAMPLES = [
     ["Привет! Это Higgs Audio Studio — локальная озвучка на ста языках."],
@@ -665,7 +698,7 @@ def build():
                     gr.Markdown(f"**{clabel}**")
                     with gr.Row():
                         for val in sorted(dr.WHITELIST[cat]):
-                            gr.Button(val, size="sm", min_width=70).click(
+                            gr.Button(val, size="sm", elem_classes=["tagbtn"]).click(
                                 lambda t, c=cat, v=val: (t or "") + f"<|{c}:{v}|>", [e_text], [e_text])
                 with gr.Row():
                     e_enrich = gr.Button(T("enrich"), variant="secondary")
@@ -673,7 +706,7 @@ def build():
                 e_out = gr.Audio(label=T("result"), type="numpy", autoplay=True)
                 gr.Examples(EXPR_EXAMPLES, inputs=[e_text], label=T("examples"))
                 with gr.Accordion(T("tags_help"), open=False):
-                    gr.Markdown(T("tags_legend"))
+                    gr.Markdown(TAGS_LEGEND_MD)
                 e_enrich.click(cb_enrich, [e_text, model_dd], [e_text])
                 e_btn.click(cb_expr, [e_text, model_dd, e_auto], [e_out, e_text])
 
