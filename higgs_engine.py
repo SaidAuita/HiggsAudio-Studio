@@ -33,12 +33,21 @@ def device_info():
     return f"{name} | VRAM {vram:.1f} ГБ" if dev == "cuda" else "CPU (медленно)"
 
 
+_forced_precision = None  # выбор квантизации из UI-дропдауна
+
+
+def set_precision(p):
+    """UI выбор квантизации: '4bit' / '8bit' / 'bf16'. Выгружает модель — перезагрузится в новой точности."""
+    global _forced_precision
+    _forced_precision = p if p in ("4bit", "8bit", "bf16") else None
+    unload_tts()
+
+
 def auto_precision(vram_gb, device):
-    # 4-бит (bnb nf4) по умолчанию — экономит VRAM (рядом грузится GGUF-режиссёр).
-    # Можно переопределить через env HIGGS_TTS_PRECISION = bf16 / 8bit / 4bit.
-    override = os.environ.get("HIGGS_TTS_PRECISION", "").strip().lower()
-    if override in ("bf16", "8bit", "4bit"):
-        return override if device == "cuda" else "cpu"
+    # 4-бит (bnb nf4) по умолчанию. Приоритет: UI-выбор > env HIGGS_TTS_PRECISION > дефолт.
+    pick = _forced_precision or os.environ.get("HIGGS_TTS_PRECISION", "").strip().lower()
+    if pick in ("bf16", "8bit", "4bit"):
+        return pick if device == "cuda" else "cpu"
     if device == "cpu":
         return "cpu"
     return "4bit"
@@ -56,11 +65,15 @@ def get_tts(precision=None):
     precision = precision or auto_precision(vram, device)
     print(f"[higgs] загрузка TTS ({precision}) на {name}...")
     quant = None
+    # Голову/эмбеддинг аудио-кодов держим ВНЕ кванта: они tied и предсказывают стоп-токен (EOC);
+    # под nf4 голова деградирует → модель не ловит конец → генерит вразнос (залипание).
+    skip = ["audio_head", "audio_embedding"]
     if precision == "4bit":
         quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                                   bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True)
+                                   bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True,
+                                   llm_int8_skip_modules=skip)
     elif precision == "8bit":
-        quant = BitsAndBytesConfig(load_in_8bit=True)
+        quant = BitsAndBytesConfig(load_in_8bit=True, llm_int8_skip_modules=skip)
     _tok = AutoTokenizer.from_pretrained(TTS_REPO)
     kw = dict(trust_remote_code=True, dtype=torch.bfloat16)
     if quant is not None:
@@ -101,7 +114,7 @@ def _load_ref(path):
     return torch.from_numpy(data).mean(dim=1), sr  # mono [L], sr
 
 
-def generate(text, ref_audio=None, ref_text=None, temperature=0.7, top_p=0.95,
+def generate(text, ref_audio=None, ref_text=None, temperature=1.0, top_p=0.95,
              top_k=50, max_new_tokens=2048, seed=-1):
     """Озвучить один фрагмент. Возвращает (sr, np.float32[L]). ref_audio — путь к файлу."""
     import numpy as np
@@ -124,7 +137,18 @@ def generate(text, ref_audio=None, ref_text=None, temperature=0.7, top_p=0.95,
         kw["reference_sample_rate"] = sr
         if ref_text and ref_text.strip():
             kw["reference_text"] = ref_text.strip()
-    audio = m.generate_speech(text, _tok, **kw)
+    # Анти-разнос (как retry_badcase в VoxCPM2): если аудио неправдоподобно длинное для
+    # текста — модель пошла вразнос, перегенерируем (для случайного сида попытки разные).
+    fixed_seed = seed is not None and int(seed) >= 0
+    limit_sec = 0.13 * max(len(text), 1) + 3.0
+    attempts = 1 if fixed_seed else 3
+    audio = None
+    for a in range(attempts):
+        audio = m.generate_speech(text, _tok, **kw)
+        sec = (audio.shape[-1] if hasattr(audio, "shape") else len(audio)) / SR
+        if sec <= limit_sec or a == attempts - 1:
+            break
+        print(f"[higgs] разнос {sec:.1f}s > {limit_sec:.1f}s — повтор {a + 2}/{attempts}")
     return SR, audio.detach().cpu().numpy().astype(np.float32)
 
 

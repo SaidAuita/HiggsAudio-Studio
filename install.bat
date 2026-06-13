@@ -178,6 +178,24 @@ if "%CUDA_VERSION%"=="cpu" (
     )
 )
 
+REM ============================================================
+REM  Шаг 8: Стартовый voice-pack (пресеты голосов, тянется архивом с HF)
+REM ============================================================
+echo [+] Загружаю стартовый voice-pack...
+if exist "voices\*.mp3" (
+    echo [OK] Голоса уже на месте
+) else (
+    curl -L -o downloads\voice-pack.zip https://huggingface.co/datasets/nerualdreming/VibeVoice/resolve/main/voice-pack.zip
+    if exist "downloads\voice-pack.zip" (
+        powershell -Command "& {Expand-Archive -Path 'downloads\voice-pack.zip' -DestinationPath 'downloads\vp' -Force}"
+        if exist "downloads\vp\voice-pack" (
+            xcopy /E /Y /Q "downloads\vp\voice-pack\*" "voices\" >nul
+        ) else (
+            xcopy /E /Y /Q "downloads\vp\*" "voices\" >nul
+        )
+        echo [OK] Voice-pack установлен
+    )
+)
 echo [7/7] Финализация...
 echo %CUDA_VERSION%> cuda_version.txt
 

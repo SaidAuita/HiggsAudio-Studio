@@ -171,6 +171,8 @@ _RU = {
     "text": "Текст", "ph_text": "Введите текст… можно вставлять теги: <|emotion:elation|>Привет!",
     "generate": "🔊 Озвучить", "result": "Результат", "advanced": "Доп. настройки",
     "director_model": "Модель режиссёра (для обогащения / диалогов)",
+    "quant": "Квантизация Higgs (4-bit nf4 = меньше VRAM)",
+    "download_all": "⬇️ Скачать все 700+",
     "enrich": "✨ Обогатить текст", "auto_enrich": "✨ Авто-обогащение промпта режиссёром",
     "ref_voice": "Аудио-референс (голос)", "ref_text": "Транскрипт референса (заполнится сам)",
     "ph_clone_tr": "Что произносится в референсе…", "voice_preset": "Пресет голоса",
@@ -180,7 +182,7 @@ _RU = {
     "ph_clone": "Текст, который произнесёт клонированный голос…",
     "cloud_title": "☁️ Скачать голоса с сервера (русский пак)", "cloud_status": "Статус",
     "load_list": "Обновить список", "cloud_voices": "Доступные голоса", "download_sel": "⬇️ Скачать выбранные",
-    "download_all": "⬇️ Скачать ВСЮ коллекцию голосов",
+    "refresh_voices": "🔄 Обновить список голосов",
     "num_speakers": "Количество дикторов", "pod_hint": "Опиши тему — режиссёр напишет диалог. Затем задай голоса дикторам и нажми «Озвучить».",
     "pod_format": _PODFMT_RU, "topic": "Тема подкаста", "ph_topic": "Напр.: плюсы и минусы локального ИИ дома",
     "make_script": "📝 Сгенерировать сценарий", "script": "Сценарий (можно править)",
@@ -197,6 +199,8 @@ _EN = {
     "text": "Text", "ph_text": "Type text… you can insert tags: <|emotion:elation|>Hi!",
     "generate": "🔊 Generate", "result": "Result", "advanced": "Advanced",
     "director_model": "Director model (enrich / dialogues)",
+    "quant": "Higgs quantization (4-bit nf4 = less VRAM)",
+    "download_all": "⬇️ Download all 700+",
     "enrich": "✨ Enrich text", "auto_enrich": "✨ Auto-enrich prompt with director",
     "ref_voice": "Reference audio (voice)", "ref_text": "Reference transcript (auto-filled)",
     "ph_clone_tr": "What the reference says…", "voice_preset": "Voice preset",
@@ -206,7 +210,7 @@ _EN = {
     "ph_clone": "Text the cloned voice will speak…",
     "cloud_title": "☁️ Download voices from server (Russian pack)", "cloud_status": "Status",
     "load_list": "Refresh list", "cloud_voices": "Available voices", "download_sel": "⬇️ Download selected",
-    "download_all": "⬇️ Download the WHOLE voice collection",
+    "refresh_voices": "🔄 Refresh voice list",
     "num_speakers": "Number of speakers", "pod_hint": "Describe a topic — the director writes a dialogue. Then set speaker voices and synthesize.",
     "pod_format": _PODFMT_EN, "topic": "Podcast topic", "ph_topic": "e.g. pros and cons of local AI at home",
     "make_script": "📝 Generate script", "script": "Script (editable)",
@@ -471,39 +475,46 @@ def cb_load_cloud():
     return status, gr.update(choices=voices, value=[])
 
 
-def cb_download_voices(selected):
+def _dl_voice(name):
     import requests
+    try:
+        r = requests.get(f"{CLOUD_VOICES_BASE}/{name}.mp3?download=true", timeout=90)
+        r.raise_for_status()
+        (VOICES_DIR / f"{name}.mp3").write_bytes(r.content)
+        try:
+            rt = requests.get(f"{CLOUD_VOICES_BASE}/{name}.txt?download=true", timeout=30)
+            if rt.status_code == 200:
+                (VOICES_DIR / f"{name}.txt").write_text(rt.text, encoding="utf-8")
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        print(f"[voices] dl {name}: {e}")
+        return False
+
+
+def cb_download_voices(selected):
     if not selected:
         return "Выберите голоса / Select voices", gr.update()
-    ok = 0
-    for name in selected:
-        try:
-            r = requests.get(f"{CLOUD_VOICES_BASE}/{name}.mp3?download=true", timeout=90)
-            r.raise_for_status()
-            (VOICES_DIR / f"{name}.mp3").write_bytes(r.content)
-            try:
-                rt = requests.get(f"{CLOUD_VOICES_BASE}/{name}.txt?download=true", timeout=30)
-                if rt.status_code == 200:
-                    (VOICES_DIR / f"{name}.txt").write_text(rt.text, encoding="utf-8")
-            except Exception:
-                pass
-            ok += 1
-        except Exception as e:
-            print(f"[voices] dl {name}: {e}")
+    ok = sum(_dl_voice(n) for n in selected)
     return f"Скачано / Downloaded: {ok}/{len(selected)}", gr.update(choices=[OWN_FILE] + scan_voices())
 
 
 def cb_download_all_cloud(progress=gr.Progress()):
-    """Скачать ВСЮ коллекцию голосов (Slait/russia_voices) одним снапшотом в voices/."""
-    progress(0.1, desc="Скачиваю коллекцию голосов...")
+    """Скачать ВСЮ облачную коллекцию (Slait/russia_voices, 700+ голосов)."""
     try:
-        from huggingface_hub import snapshot_download
-        snapshot_download(CLOUD_VOICES_REPO, repo_type="dataset", local_dir=str(VOICES_DIR),
-                          allow_patterns=["*.mp3", "*.wav", "*.flac", "*.txt", "*.lab"])
+        from huggingface_hub import list_repo_files
+        names = sorted(f[:-4] for f in list_repo_files(CLOUD_VOICES_REPO, repo_type="dataset") if f.endswith(".mp3"))
     except Exception as e:
-        return f"Ошибка / Error: {e}", gr.update()
-    n = len(scan_voices())
-    return f"Скачана вся коллекция / Downloaded full collection: {n} голосов", gr.update(choices=[OWN_FILE] + scan_voices())
+        return f"Ошибка списка / List error: {e}", gr.update()
+    if not names:
+        return "Список пуст / Empty list", gr.update()
+    ok = 0
+    for i, name in enumerate(names):
+        progress((i + 1) / len(names), desc=f"{i + 1}/{len(names)} · {name}")
+        if _dl_voice(name):
+            ok += 1
+    return f"Скачано / Downloaded: {ok}/{len(names)}", gr.update(choices=[OWN_FILE] + scan_voices())
 
 
 # ----------------------------------------------------------------------------
@@ -594,9 +605,11 @@ def cb_batch(texts, model, auto, progress=gr.Progress()):
 # ----------------------------------------------------------------------------
 def _speaker_blocks():
     """4 блока диктора (пресет + аудио + транскрипт), показ по слайдеру. Возвращает (slider, audios, texts)."""
-    num = gr.Slider(2, MAX_SPK, value=2, step=1, label=T("num_speakers"))
+    with gr.Row():
+        num = gr.Slider(2, MAX_SPK, value=2, step=1, label=T("num_speakers"))
+        refresh = gr.Button(T("refresh_voices"), size="sm", scale=0)
     choices = [OWN_FILE] + scan_voices()
-    blocks, audios, texts = [], [], []
+    blocks, audios, texts, pres = [], [], [], []
     with gr.Row():
         for i in range(MAX_SPK):
             with gr.Group(visible=(i < 2), elem_classes="spk-block") as bl:
@@ -608,7 +621,9 @@ def _speaker_blocks():
             blocks.append(bl)
             audios.append(au)
             texts.append(tx)
+            pres.append(pre)
     num.change(lambda n: [gr.update(visible=(i < n)) for i in range(MAX_SPK)], [num], blocks)
+    refresh.click(lambda: [gr.update(choices=[OWN_FILE] + scan_voices()) for _ in range(MAX_SPK)], None, pres)
     return num, audios, texts
 
 
@@ -616,6 +631,9 @@ def build():
     with gr.Blocks(title=APP_NAME) as demo:
         gr.HTML(T("brand_header_html"))
         model_dd = gr.Dropdown(MODEL_CHOICES, value=dr.DEFAULT_MODEL, label=T("director_model"))
+        quant_dd = gr.Dropdown([("4-bit (nf4) — рекоменд.", "4bit"), ("8-bit", "8bit"), ("bf16 — макс. качество", "bf16")],
+                               value="4bit", label=T("quant"))
+        quant_dd.change(lambda p: eng.set_precision(p), [quant_dd], None)
 
         with gr.Tabs():
             # 1. Озвучка
@@ -624,7 +642,7 @@ def build():
                     with gr.Column():
                         t_text = gr.Textbox(label=T("text"), placeholder=T("ph_text"), lines=4)
                         with gr.Accordion(T("advanced"), open=False):
-                            t_temp = gr.Slider(0.0, 1.5, 0.7, step=0.05, label="Temperature")
+                            t_temp = gr.Slider(0.0, 1.5, 1.0, step=0.05, label="Temperature")
                             t_top_p = gr.Slider(0.1, 1.0, 0.95, step=0.01, label="Top-p")
                             t_top_k = gr.Slider(0, 1026, 50, step=1, label="Top-k (0=off)")
                             t_max = gr.Slider(64, 4096, 2048, step=64, label=T("max_tokens"))
@@ -665,23 +683,24 @@ def build():
                         c_ref = gr.Audio(label=T("ref_voice"), type="filepath", sources=["upload", "microphone"])
                         c_ref_text = gr.Textbox(label=T("ref_text"), lines=2, placeholder=T("ph_clone_tr"))
                         c_tr_btn = gr.Button(T("transcribe_btn"), size="sm")
-                        c_temp = gr.Slider(0.0, 1.5, 0.7, step=0.05, label="Temperature")
+                        c_temp = gr.Slider(0.0, 1.5, 1.0, step=0.05, label="Temperature")
                         c_top_p = gr.Slider(0.1, 1.0, 0.95, step=0.01, label="Top-p")
                         c_seed = gr.Number(-1, label=T("seed"), precision=0)
                         c_auto = gr.Checkbox(label=T("auto_enrich"), value=False)
                         c_btn = gr.Button(T("generate"), variant="primary", size="lg")
                     c_out = gr.Audio(label=T("result"), type="numpy", autoplay=True)
-                with gr.Accordion(T("cloud_title"), open=True):
-                    cl_all = gr.Button(T("download_all"), variant="primary", size="lg")
+                with gr.Accordion(T("cloud_title"), open=False):
                     cl_status = gr.Textbox(label=T("cloud_status"), interactive=False)
                     with gr.Row():
                         cl_load = gr.Button(T("load_list"), size="sm")
-                        cl_dl = gr.Button(T("download_sel"), size="sm")
+                        cl_all = gr.Button(T("download_all"), size="sm")
                     cl_voices = gr.CheckboxGroup(choices=[], label=T("cloud_voices"))
+                    cl_dl = gr.Button(T("download_sel"), variant="primary", size="sm")
                 c_preset.change(cb_preset, [c_preset], [c_ref, c_ref_text])
                 c_tr_btn.click(transcribe, [c_ref], [c_ref_text])
                 c_refresh.click(lambda: gr.update(choices=[OWN_FILE] + scan_voices()), None, [c_preset])
                 cl_load.click(cb_load_cloud, None, [cl_status, cl_voices])
+                cl_all.click(cb_download_all_cloud, None, [cl_status, c_preset])
                 cl_dl.click(cb_download_voices, [cl_voices], [cl_status, c_preset])
                 c_btn.click(cb_clone, [c_text, model_dd, c_auto, c_ref, c_ref_text, c_preset, c_temp, c_top_p, c_seed],
                             [c_out, c_text])
