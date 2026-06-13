@@ -172,6 +172,7 @@ _RU = {
     "generate": "🔊 Озвучить", "result": "Результат", "advanced": "Доп. настройки",
     "director_model": "Модель режиссёра (для обогащения / диалогов)",
     "quant": "Квантизация Higgs (4-bit nf4 = меньше VRAM)",
+    "cat_emotion": "😊 Эмоции (на предложение)", "cat_prosody": "🎵 Просодия", "cat_style": "🎭 Стиль", "cat_sfx": "🔊 Звуки (по месту в тексте)",
     "download_all": "⬇️ Скачать все 700+",
     "enrich": "✨ Обогатить текст", "auto_enrich": "✨ Авто-обогащение промпта режиссёром",
     "ref_voice": "Аудио-референс (голос)", "ref_text": "Транскрипт референса (заполнится сам)",
@@ -200,6 +201,7 @@ _EN = {
     "generate": "🔊 Generate", "result": "Result", "advanced": "Advanced",
     "director_model": "Director model (enrich / dialogues)",
     "quant": "Higgs quantization (4-bit nf4 = less VRAM)",
+    "cat_emotion": "😊 Emotion (per sentence)", "cat_prosody": "🎵 Prosody", "cat_style": "🎭 Style", "cat_sfx": "🔊 Sounds (inline)",
     "download_all": "⬇️ Download all 700+",
     "enrich": "✨ Enrich text", "auto_enrich": "✨ Auto-enrich prompt with director",
     "ref_voice": "Reference audio (voice)", "ref_text": "Reference transcript (auto-filled)",
@@ -658,9 +660,11 @@ def build():
             with gr.Tab(T("tab_expr")):
                 e_text = gr.Textbox(label=T("text"), placeholder=T("ph_text"), lines=5)
                 e_auto = gr.Checkbox(label=T("auto_enrich"), value=False)
-                with gr.Row():
-                    for cat in ("emotion", "sfx", "prosody", "style"):
-                        for val in sorted(dr.WHITELIST[cat])[:6]:
+                for cat, clabel in (("emotion", T("cat_emotion")), ("prosody", T("cat_prosody")),
+                                    ("style", T("cat_style")), ("sfx", T("cat_sfx"))):
+                    gr.Markdown(f"**{clabel}**")
+                    with gr.Row():
+                        for val in sorted(dr.WHITELIST[cat]):
                             gr.Button(val, size="sm", min_width=70).click(
                                 lambda t, c=cat, v=val: (t or "") + f"<|{c}:{v}|>", [e_text], [e_text])
                 with gr.Row():
