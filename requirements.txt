@@ -1,0 +1,11 @@
+# Higgs Audio Studio — Python deps (torch/torchaudio installed separately in install.bat with CUDA)
+transformers>=5.5
+accelerate
+bitsandbytes
+gradio
+soundfile
+numpy
+huggingface_hub
+hf-xet
+sentencepiece
+protobuf

@@ -1,0 +1,17 @@
+# Portable runtime / models / artifacts — never committed
+python/
+models/
+cache/
+temp/
+tmp/
+downloads/
+output/
+generations/
+voices/
+ffmpeg/
+*.pyc
+__pycache__/
+cuda_version.txt
+*.log
+.DS_Store
+Thumbs.db
