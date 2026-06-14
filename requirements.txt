@@ -5,6 +5,7 @@ bitsandbytes
 gradio
 soundfile
 numpy
+pyloudnorm  # выравнивание громкости спикеров в миксе (LUFS, EBU R128); тянет scipy
 huggingface_hub
 hf-xet
 sentencepiece

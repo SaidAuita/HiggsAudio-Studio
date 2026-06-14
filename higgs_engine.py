@@ -346,18 +346,57 @@ def generate(text, ref_audio=None, ref_text=None, temperature=1.0, top_p=0.95,
     return SR, audio.detach().cpu().numpy().astype(np.float32)
 
 
-def _concat(chunks, gap=0.3):
+TARGET_LUFS = -16.0              # стандарт подкастов/TTS (EBU R128, Google Assistant)
+_PEAK_CEIL = 10 ** (-1.0 / 20)   # −1 dBFS — защита микса от клиппинга
+_MAX_GAIN = 10 ** (20.0 / 20)    # не разгонять тихий фрагмент сильнее +20 dB (мусор/тишина)
+
+
+def _loudness_normalize(x, sr=SR):
+    """Фрагмент → целевая громкость, чтобы спикеры в миксе звучали ровно (один не тише другого).
+    LUFS-метр BS.1770 (pyloudnorm) если доступен, иначе RMS-фоллбек на чистом numpy."""
+    import numpy as np
+    x = np.asarray(x, dtype=np.float32)
+    if x.size == 0:
+        return x
+    try:
+        import pyloudnorm as pyln
+        loud = pyln.Meter(sr).integrated_loudness(x)
+        if np.isfinite(loud):
+            gain = 10 ** ((TARGET_LUFS - loud) / 20)
+            return (x * min(gain, _MAX_GAIN)).astype(np.float32)
+    except Exception:
+        pass
+    rms = float(np.sqrt(np.mean(x ** 2)))   # фоллбек: RMS к ~−20 dBFS (ориентир для речи)
+    if rms < 1e-6:
+        return x
+    return (x * min((10 ** (-20.0 / 20)) / rms, _MAX_GAIN)).astype(np.float32)
+
+
+def _peak_limit(x, ceil=_PEAK_CEIL):
+    import numpy as np
+    if x.size == 0:
+        return x
+    peak = float(np.max(np.abs(x)))
+    return (x * (ceil / peak)).astype(np.float32) if peak > ceil else x
+
+
+def _concat(chunks, gap=0.3, normalize=True):
+    """Склейка фрагментов с паузой. normalize=True выравнивает громкость спикеров
+    (LUFS/RMS на фрагмент) и ставит пик-лимит −1 dBFS на итоговый микс."""
     import numpy as np
     chunks = [c for c in chunks if c is not None and len(c)]
     if not chunks:
         return np.zeros(0, np.float32)
+    if normalize:
+        chunks = [_loudness_normalize(c) for c in chunks]
     sil = np.zeros(int(SR * gap), np.float32)
     out = []
     for i, c in enumerate(chunks):
         if i:
             out.append(sil)
         out.append(c)
-    return np.concatenate(out)
+    mix = np.concatenate(out)
+    return _peak_limit(mix) if normalize else mix
 
 
 def synth_longform(paragraphs, ref_audio=None, ref_text=None, **kw):

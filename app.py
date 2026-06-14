@@ -622,16 +622,15 @@ def cb_book_markup(text, num, model):
 
 
 def cb_multi_synth(script, a0, a1, a2, a3, t0, t1, t2, t3, progress=gr.Progress()):
-    """Парсим 'Speaker N:' → синтез каждой реплики голосом диктора N → склейка с паузой 0.3с."""
-    import numpy as np
+    """Парсим 'Speaker N:' → синтез каждой реплики голосом диктора N → склейка с нормализацией.
+    eng._concat выравнивает громкость спикеров (LUFS −16) + пик-лимит, иначе один тише другого."""
     eng.clear_cancel()
     audios = [a0, a1, a2, a3]
     texts = [t0, t1, t2, t3]
     turns = [(sid, txt) for sid, txt in parse_script(script) if txt.strip()]
     if not turns:
         return None
-    parts = []
-    sil = np.zeros(int(eng.SR * 0.3), np.float32)
+    chunks = []
     for i, (sid, txt) in enumerate(turns):
         if eng.cancelled():
             break
@@ -639,12 +638,9 @@ def cb_multi_synth(script, a0, a1, a2, a3, t0, t1, t2, t3, progress=gr.Progress(
         ref = audios[sid] if 0 <= sid < MAX_SPK else None
         rt = (texts[sid] if 0 <= sid < MAX_SPK else None) or None
         _, wav = _speak(txt, ref_audio=ref, ref_text=rt)
-        if wav is None or len(wav) == 0:
-            continue
-        if parts:
-            parts.append(sil)
-        parts.append(wav)
-    final = np.concatenate(parts) if parts else np.zeros(0, np.float32)
+        if wav is not None and len(wav):
+            chunks.append(wav)
+    final = eng._concat(chunks, gap=0.3)
     _save(eng.SR, final, "multi")
     return (eng.SR, final)
 
