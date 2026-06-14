@@ -135,48 +135,37 @@ echo [4/7] Устанавливаю зависимости...
 python\python.exe -m pip install -r requirements.txt --no-warn-script-location
 
 REM ============================================================
-REM  Шаг 6: Ускорители (triton-windows + Python headers + Flash Attention 2)
+REM  Шаг 6: Triton для torch.compile (~2x). Скобки/for-блоки убраны (goto-поток).
+REM  Higgs использует SDPA (flash-ядра встроены) — внешний Flash-Attention 2 НЕ нужен (модель его отвергает).
 REM ============================================================
-if not "%CUDA_VERSION%"=="cpu" (
-    echo [5/7] Устанавливаю Triton (torch.compile / CUDA graphs)...
-    python\python.exe -m pip install "triton-windows>=3.0.0,<3.4" --no-warn-script-location
-    if not exist "python\Include\Python.h" (
-        echo Скачиваю Python headers для Triton...
-        for /f "tokens=*" %%v in ('python\python.exe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"') do set "PY_VER=%%v"
-        powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/!PY_VER!/amd64/dev.msi' -OutFile 'downloads\pydev.msi'}"
-        if exist "downloads\pydev.msi" (
-            msiexec /a "downloads\pydev.msi" /qn TARGETDIR="%SCRIPT_DIR%downloads\pydev_extract"
-            if not exist "python\Include" mkdir "python\Include"
-            if not exist "python\libs" mkdir "python\libs"
-            xcopy /E /Y "downloads\pydev_extract\include\*" "python\Include\" >nul 2>&1
-            xcopy /E /Y "downloads\pydev_extract\libs\*" "python\libs\" >nul 2>&1
-            if exist "downloads\pydev_extract" rmdir /s /q "downloads\pydev_extract"
-            echo [OK] Python headers установлены
-        )
-    )
-)
-if "%CUDA_VERSION%"=="cu128" (
-    echo Устанавливаю Flash Attention 2 (cu128torch2.7)...
-    python\python.exe -m pip install "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.11/flash_attn-2.8.3%%2Bcu128torch2.7-cp312-cp312-win_amd64.whl" --no-warn-script-location
-)
-if "%CUDA_VERSION%"=="cu126" (
-    echo Устанавливаю Flash Attention 2 (cu126torch2.7, Ampere)...
-    python\python.exe -m pip install "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.11/flash_attn-2.8.3%%2Bcu126torch2.7-cp312-cp312-win_amd64.whl" --no-warn-script-location
-)
+if "%CUDA_VERSION%"=="cpu" goto :after_accel
+echo [5/7] Устанавливаю Triton для torch.compile...
+python\python.exe -m pip install "triton-windows>=3.0.0,<3.4" --no-warn-script-location
+if exist "python\Include\Python.h" goto :after_accel
+echo Скачиваю Python headers для Triton...
+powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.9/amd64/dev.msi' -OutFile 'downloads\pydev.msi'}"
+if not exist "downloads\pydev.msi" goto :after_accel
+msiexec /a "downloads\pydev.msi" /qn TARGETDIR="%SCRIPT_DIR%downloads\pydev_extract"
+if not exist "python\Include" mkdir "python\Include"
+if not exist "python\libs" mkdir "python\libs"
+xcopy /E /Y "downloads\pydev_extract\include\*" "python\Include\" >nul 2>&1
+xcopy /E /Y "downloads\pydev_extract\libs\*" "python\libs\" >nul 2>&1
+if exist "downloads\pydev_extract" rmdir /s /q "downloads\pydev_extract"
+echo [OK] Python headers установлены
+:after_accel
 
 REM ============================================================
 REM  Шаг 7: llama-cpp-python (GGUF-режиссёр на GPU) + CUDA-рантайм рядом с llama.dll
 REM ============================================================
 echo [6/7] Устанавливаю llama-cpp-python (AI-режиссёр, GGUF)...
-if "%CUDA_VERSION%"=="cpu" (
-    python\python.exe -m pip install llama-cpp-python --only-binary=:all: --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu --no-warn-script-location
-) else (
-    python\python.exe -m pip install llama-cpp-python --only-binary=:all: --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 --no-warn-script-location
-    echo Копирую CUDA-рантайм torch рядом с llama.dll...
-    for %%D in (cudart64_12.dll cublas64_12.dll cublasLt64_12.dll cusparse64_12.dll) do (
-        if exist "python\Lib\site-packages\torch\lib\%%D" copy /y "python\Lib\site-packages\torch\lib\%%D" "python\Lib\site-packages\llama_cpp\lib\%%D" >nul 2>&1
-    )
-)
+if "%CUDA_VERSION%"=="cpu" goto :llama_cpu
+python\python.exe -m pip install llama-cpp-python --only-binary=:all: --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 --no-warn-script-location
+echo Копирую CUDA-рантайм torch рядом с llama.dll...
+for %%D in (cudart64_12.dll cublas64_12.dll cublasLt64_12.dll cusparse64_12.dll) do if exist "python\Lib\site-packages\torch\lib\%%D" copy /y "python\Lib\site-packages\torch\lib\%%D" "python\Lib\site-packages\llama_cpp\lib\%%D" >nul 2>&1
+goto :after_llama
+:llama_cpu
+python\python.exe -m pip install llama-cpp-python --only-binary=:all: --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu --no-warn-script-location
+:after_llama
 
 REM ============================================================
 REM  Шаг 8: Стартовый voice-pack (пресеты голосов, тянется архивом с HF)
