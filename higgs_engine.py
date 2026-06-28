@@ -20,7 +20,17 @@ REF_MAX_SEC = 30
 _REF_CACHE = {}  # path → (mtime, codes_TN, trimmed): один голос не перекодируем повторно
 
 
+_CPU_MODE = False
+
+
+def set_cpu_mode(val):
+    global _CPU_MODE
+    _CPU_MODE = bool(val)
+
+
 def detect_device():
+    if _CPU_MODE:
+        return "cpu", "CPU", 0.0
     import torch
     if torch.cuda.is_available():
         p = torch.cuda.get_device_properties(0)
@@ -134,8 +144,23 @@ def cancelled():
     return _CANCEL
 
 
-def unload_tts():
+def is_keep_vram():
+    try:
+        import json
+        from pathlib import Path
+        cfg_path = Path(__file__).parent.absolute() / "gui_config.json"
+        if cfg_path.exists():
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                return json.load(f).get("keep_vram", False)
+    except Exception:
+        pass
+    return False
+
+
+def unload_tts(force=False):
     """Выгрузить TTS из памяти (для последовательной загрузки с LLM-режиссёром)."""
+    if is_keep_vram() and not force:
+        return
     global _model, _tok
     _model = None
     _tok = None
@@ -165,6 +190,7 @@ def _ref_codes(m, path):
         mt = 0.0
     hit = _REF_CACHE.get(path)
     if hit and hit[0] == mt:
+        print(f"[gen] референс {os.path.basename(path)} взят из кэша (уже кодирован)", flush=True)
         return hit[1], hit[2]
     wav, sr = _load_ref(path)
     cap = int(sr * REF_MAX_SEC)
@@ -221,8 +247,10 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
             kw["reference_sample_rate"] = reference_sample_rate
         return m.generate_speech(text, tok, **kw), False
 
+    device, name, vram = detect_device()
+    dev_str = f" [на {name}]"
     att = f" · попытка {attempt[0]}/{attempt[1]}" if attempt[1] > 1 else ""
-    print(f"[gen] >> синтез: {label}{att}", flush=True)
+    print(f"[gen] >> синтез{dev_str}: {label}{att}", flush=True)
 
     with torch.no_grad():
         delayed_ref = None
