@@ -287,6 +287,8 @@ _RU = {
     "processed_text_label": "📝 Текст после LLM (режиссёра)",
     "cpu_only_label": "💻 Использовать только CPU (без видеокарты)",
     "keep_vram_label": "⚡ Не выгружать модели из памяти (ускоряет повторные запуски; для TTS достаточно 6 ГБ+ VRAM)",
+    "lc_custom_num": "Кастомный номер",
+    "lc_num_input": "Номер файла",
 }
 _EN = {
     "tab_tts": "🎙️ TTS", "tab_expr": "🎭 Expressive + Director", "tab_clone": "🧬 Cloning",
@@ -335,6 +337,8 @@ _EN = {
     "processed_text_label": "📝 Text after LLM (director)",
     "cpu_only_label": "💻 Use CPU only (no GPU)",
     "keep_vram_label": "⚡ Keep models in VRAM (speeds up subsequent runs; needs only 6 GB+ VRAM for pure TTS)",
+    "lc_custom_num": "Custom number",
+    "lc_num_input": "File number",
 }
 I18N = gr.I18n(en=_EN, ru=_RU)
 
@@ -799,7 +803,7 @@ def save_clone_settings(text, preset, auto, temp, top_p, seed):
     update_gui_config("c_seed", seed)
 
 
-def save_long_clone_settings(text, preset, max_chars, gap, merge, temp, top_p, seed, auto):
+def save_long_clone_settings(text, preset, max_chars, gap, merge, temp, top_p, seed, auto, custom_num, num_input):
     update_gui_config("lc_text", text)
     update_gui_config("lc_preset", preset)
     update_gui_config("lc_max_chars", max_chars)
@@ -809,6 +813,8 @@ def save_long_clone_settings(text, preset, max_chars, gap, merge, temp, top_p, s
     update_gui_config("lc_top_p", top_p)
     update_gui_config("lc_seed", seed)
     update_gui_config("lc_auto", auto)
+    update_gui_config("lc_custom_num", custom_num)
+    update_gui_config("lc_num_input", num_input)
 
 
 def save_book_settings(text):
@@ -950,52 +956,66 @@ def cb_test_llm_connection(api_url, api_key, api_model):
 
 
 
-def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, top_p, seed, max_chars, gap, merge, api_url, api_key, api_model, system_prompt, progress=gr.Progress()):
+def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, top_p, seed, max_chars, gap, merge, api_url, api_key, api_model, system_prompt, custom_num, num_input):
     eng.clear_cancel()
     import soundfile as sf
     import numpy as np
     from datetime import datetime
 
-
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = OUTPUT_DIR / f"long_clone_{stamp}"
     out_dir.mkdir(exist_ok=True)
 
-
     ref = ref_audio or (voice_path(preset) if preset and preset != OWN_FILE else None)
 
+    # Clean and parse number
+    num_str = (num_input or "").strip()
+    if not num_str:
+        num_str = "01"
+    
+    width = len(num_str)
+    try:
+        val = int(num_str)
+        next_val = val + 1
+        next_num_str = f"{next_val:0{width}d}"
+    except ValueError:
+        next_num_str = num_str
 
     chunks = _chunk(text, max_chars=int(max_chars))
     if not chunks:
-        yield "Текст пуст / Text is empty", None, [], ""
+        yield "Текст пуст / Text is empty", None, [], "", num_str
         return
-
 
     device, name, vram = eng.detect_device()
     log_lines = [
         f"Устройство озвучки / Voice device: {name}",
         f"Разбито на {len(chunks)} частей. Папка: output/long_clone_{stamp}"
     ]
-    yield "\n".join(log_lines), None, [], ""
+    if custom_num:
+        fmt = _OUT_FORMAT
+        target_name = f"{num_str}.{fmt}"
+        num_dir = OUTPUT_DIR / "NUM"
+        target_path = num_dir / target_name
+        if target_path.exists():
+            warn_msg = f"⚠️ Предупреждение: файл {target_name} уже существует в папке NUM! Он будет перезаписан."
+            gr.Warning(warn_msg)
+            log_lines.insert(0, warn_msg)
 
+    yield "\n".join(log_lines), None, [], "", num_str
 
     generated_files = []
     wav_chunks = []
     processed_chunks = []
     sr = 24000
 
-
     for i, chunk in enumerate(chunks):
         if eng.cancelled():
             log_lines.append("\n⏹ Остановлено / Stopped.")
-            yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks)
+            yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
             return
 
-
-        progress((i) / len(chunks), desc=f"{i + 1}/{len(chunks)} · Часть")
         log_lines.append(f"✓ Синтез части {i + 1}/{len(chunks)}: '{chunk[:40]}...'")
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks)
-
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
 
         if auto:
             s_prompt = system_prompt + "\n" + dr._TAG_RULES
@@ -1016,9 +1036,7 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
         else:
             chunk_to_speak = chunk
 
-
         processed_chunks.append(chunk_to_speak)
-
 
         try:
             chunk_sr, chunk_wav = eng.generate(
@@ -1031,7 +1049,6 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
             )
             sr = chunk_sr
 
-
             if chunk_wav is not None and len(chunk_wav) > 0:
                 filename = out_dir / f"chunk_{i + 1:03d}.wav"
                 sf.write(str(filename), chunk_wav, sr)
@@ -1043,57 +1060,83 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
         except Exception as e:
             log_lines.append(f"  -> Ошибка генерации: {e}")
 
-
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks)
-
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
 
     merged_path = None
+    final_wav = None
+    final_saved_path = None
+
     if merge and wav_chunks and not eng.cancelled():
         log_lines.append("\nСклеивание фрагментов...")
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks)
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
         
-
         silence_len = int(gap * sr)
         sil = np.zeros(silence_len, dtype=np.float32)
         
-
         out_wav = []
         for idx, w in enumerate(wav_chunks):
             if idx > 0:
                 out_wav.append(sil)
             out_wav.append(w)
             
-
         merged_wav = np.concatenate(out_wav)
         merged_wav = eng._peak_limit(merged_wav)
         
-
         merged_filename = out_dir / f"merged_{stamp}.wav"
         sf.write(str(merged_filename), merged_wav, sr)
         merged_path = str(merged_filename)
         
-
         _save_path = _save(sr, merged_wav, f"long_clone_merged")
         if _save_path:
             generated_files.insert(0, _save_path)
             
-
         log_lines.append(f"Склеено и сохранено: {merged_filename.name}")
-        yield "\n".join(log_lines), _save_path, generated_files, "\n\n".join(processed_chunks)
+        final_wav = merged_wav
+        final_saved_path = _save_path
+        yield "\n".join(log_lines), _save_path, generated_files, "\n\n".join(processed_chunks), num_str
+    elif wav_chunks and not eng.cancelled():
+        if len(wav_chunks) == 1:
+            final_wav = wav_chunks[0]
+            final_saved_path = generated_files[0] if generated_files else None
+        else:
+            final_wav = np.concatenate(wav_chunks)
+            final_saved_path = generated_files[0] if generated_files else None
+        yield "\n".join(log_lines), final_saved_path, generated_files, "\n\n".join(processed_chunks), num_str
     else:
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks)
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
 
+    custom_saved_path = None
+    if custom_num and final_wav is not None and not eng.cancelled():
+        num_dir = OUTPUT_DIR / "NUM"
+        num_dir.mkdir(parents=True, exist_ok=True)
+        fmt = _OUT_FORMAT
+        container, subtype = _FMT.get(fmt, ("WAV", None))
+        custom_filepath = num_dir / f"{num_str}.{fmt}"
+        
+        try:
+            sf.write(str(custom_filepath), final_wav, sr, format=container, subtype=subtype)
+            custom_saved_path = str(custom_filepath)
+            log_lines.append(f"✓ Сохранено в NUM: {custom_filepath.name}")
+        except Exception as e:
+            print(f"[save] custom num format {fmt} failed ({e}) -> wav")
+            custom_filepath = num_dir / f"{num_str}.wav"
+            sf.write(str(custom_filepath), final_wav, sr)
+            custom_saved_path = str(custom_filepath)
+            log_lines.append(f"✓ Сохранено в NUM: {custom_filepath.name}")
+            
+        if custom_saved_path:
+            generated_files.insert(0, custom_saved_path)
+            final_saved_path = custom_saved_path
 
-    progress(1.0, desc="Готово")
     log_lines.append("\n🎉 Готово / Done!")
     
-
-    if merged_path and wav_chunks:
-        yield "\n".join(log_lines), _save_path, generated_files, "\n\n".join(processed_chunks)
-    elif wav_chunks:
-        yield "\n".join(log_lines), (generated_files[0] if generated_files else None), generated_files, "\n\n".join(processed_chunks)
+    if custom_num and not eng.cancelled() and wav_chunks:
+        final_num_str = next_num_str
     else:
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks)
+        final_num_str = num_str
+        
+    yield "\n".join(log_lines), final_saved_path, generated_files, "\n\n".join(processed_chunks), final_num_str
+
 
 
 
@@ -1323,6 +1366,11 @@ def build():
             with gr.Tab(T("tab_long_clone"), id=3):
                 with gr.Row():
                     with gr.Column():
+                        with gr.Group():
+                            with gr.Row():
+                                lc_custom_num = gr.Checkbox(label=T("lc_custom_num"), value=gui_cfg.get("lc_custom_num", False), scale=1)
+                                lc_num_input = gr.Textbox(value=gui_cfg.get("lc_num_input", "01"), scale=0, min_width=100, show_label=False)
+                        lc_btn_top = gr.Button(T("generate"), variant="primary", size="lg")
                         lc_text = gr.Textbox(label=T("text"), placeholder=T("ph_clone"), lines=5, value=gui_cfg.get("lc_text", ""))
                         lc_upload = gr.UploadButton(T("upload_txt"), file_types=[".txt"], size="sm")
                         lc_processed = gr.Textbox(label=T("processed_text_label"), lines=5, interactive=False)
@@ -1373,10 +1421,14 @@ def build():
                 lc_tr_btn.click(transcribe, [lc_ref], [lc_ref_text])
                 lc_refresh.click(lambda: gr.update(choices=[OWN_FILE] + scan_voices()), None, [lc_preset])
                 lc_upload.upload(load_text_file, [lc_upload], [lc_text])
-                lc_btn.click(save_long_clone_settings, [lc_text, lc_preset, lc_max_chars, lc_gap, lc_merge, lc_temp, lc_top_p, lc_seed, lc_auto], None)
-                ev_long_clone = lc_btn.click(cb_long_clone, [lc_text, model_dd, lc_auto, lc_ref, lc_ref_text, lc_preset, lc_temp, lc_top_p, lc_seed, lc_max_chars, lc_gap, lc_merge, lc_api_url, lc_api_key, lc_api_model, lc_system_prompt],
-                                             [lc_log, lc_out, lc_files, lc_processed])
-                lc_stop.click(eng.request_cancel, None, None, queue=False, cancels=[ev_long_clone])
+                for btn in [lc_btn, lc_btn_top]:
+                    btn.click(save_long_clone_settings, [lc_text, lc_preset, lc_max_chars, lc_gap, lc_merge, lc_temp, lc_top_p, lc_seed, lc_auto, lc_custom_num, lc_num_input], None)
+                ev_long_clone = lc_btn.click(cb_long_clone, [lc_text, model_dd, lc_auto, lc_ref, lc_ref_text, lc_preset, lc_temp, lc_top_p, lc_seed, lc_max_chars, lc_gap, lc_merge, lc_api_url, lc_api_key, lc_api_model, lc_system_prompt, lc_custom_num, lc_num_input],
+                                             [lc_log, lc_out, lc_files, lc_processed, lc_num_input])
+                ev_long_clone_top = lc_btn_top.click(cb_long_clone, [lc_text, model_dd, lc_auto, lc_ref, lc_ref_text, lc_preset, lc_temp, lc_top_p, lc_seed, lc_max_chars, lc_gap, lc_merge, lc_api_url, lc_api_key, lc_api_model, lc_system_prompt, lc_custom_num, lc_num_input],
+                                             [lc_log, lc_out, lc_files, lc_processed, lc_num_input])
+                lc_stop.click(eng.request_cancel, None, None, queue=False, cancels=[ev_long_clone, ev_long_clone_top])
+
 
 
             # 4. Подкаст (мульти-спикер, формат Speaker N:)

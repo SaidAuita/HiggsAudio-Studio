@@ -1,32 +1,25 @@
 """Движок Higgs Audio v3 TTS.
-
 Загружает transformers-порт multimodalart/higgs-audio-v3-tts-4b-transformers,
 авто-точность (bf16/8/4-бит через bitsandbytes по VRAM), generate_speech,
 длинная форма с переносом голоса и мульти-спикер склейка.
-
 Тяжёлые импорты ленивые (внутри функций) — mock-режим и UI поднимаются без torch.
 """
 import os
-
 TTS_REPO = "multimodalart/higgs-audio-v3-tts-4b-transformers"
 SR = 24000
 _MOCK = bool(os.environ.get("HIGGS_UI_MOCK"))
 _model = None
 _tok = None
-
 # Клон: референс кодируется ЦЕЛИКОМ. Пресеты бывают до 300с → prefill на тысячи аудио-токенов
 # → тормоза/залипание/мусор; бьёт и по подкасту, и по аудиокниге (общий путь generate). Режем.
 REF_MAX_SEC = 30
 _REF_CACHE = {}  # path → (mtime, codes_TN, trimmed): один голос не перекодируем повторно
 
-
 _CPU_MODE = False
-
 
 def set_cpu_mode(val):
     global _CPU_MODE
     _CPU_MODE = bool(val)
-
 
 def detect_device():
     if _CPU_MODE:
@@ -37,7 +30,6 @@ def detect_device():
         return "cuda", p.name, p.total_memory / 1e9
     return "cpu", "CPU", 0.0
 
-
 def device_info():
     if _MOCK:
         return "MOCK UI (без модели)"
@@ -47,16 +39,13 @@ def device_info():
         return "CPU"
     return f"{name} | VRAM {vram:.1f} ГБ" if dev == "cuda" else "CPU (медленно)"
 
-
 _forced_precision = None  # выбор квантизации из UI-дропдауна
-
 
 def set_precision(p):
     """UI выбор квантизации: '4bit' / '8bit' / 'bf16'. Выгружает модель — перезагрузится в новой точности."""
     global _forced_precision
     _forced_precision = p if p in ("4bit", "8bit", "bf16") else None
     unload_tts()
-
 
 def auto_precision(vram_gb, device):
     # bf16 по умолчанию (чище; на 24 ГБ влезает свободно). nf4/8bit — выбором в UI.
@@ -67,7 +56,6 @@ def auto_precision(vram_gb, device):
     if device == "cpu":
         return "cpu"
     return "bf16"
-
 
 def get_tts(precision=None):
     global _model, _tok
@@ -125,24 +113,19 @@ def get_tts(precision=None):
             print(f"[higgs] torch.compile недоступен ({e}); без компиляции")
     return _model
 
-
 _CANCEL = False
-
 
 def request_cancel():
     global _CANCEL
     _CANCEL = True
     print("[gen] STOP ОТМЕНА — прерываю генерацию на текущем токене", flush=True)
 
-
 def clear_cancel():
     global _CANCEL
     _CANCEL = False
 
-
 def cancelled():
     return _CANCEL
-
 
 def is_keep_vram():
     try:
@@ -155,7 +138,6 @@ def is_keep_vram():
     except Exception:
         pass
     return False
-
 
 def unload_tts(force=False):
     """Выгрузить TTS из памяти (для последовательной загрузки с LLM-режиссёром)."""
@@ -171,13 +153,11 @@ def unload_tts(force=False):
     except Exception:
         pass
 
-
 def _load_ref(path):
     import torch
     import soundfile as sf
     data, sr = sf.read(path, dtype="float32", always_2d=True)
     return torch.from_numpy(data).mean(dim=1), sr  # mono [L], sr
-
 
 def _ref_codes(m, path):
     """Референс → коды [T,N]: обрезка до REF_MAX_SEC + кэш по (path, mtime).
@@ -202,9 +182,7 @@ def _ref_codes(m, path):
     _REF_CACHE[path] = (mt, codes, trimmed)
     return codes, trimmed
 
-
 _FRAMES_PER_SEC = None  # калибруется по факту первой генерации — для оценки секунд аудио на лету
-
 
 def _modeling(m):
     """Модуль remote-code модели (apply_delay_pattern / reverse_delay_pattern / _SamplerState / _sampler_step).
@@ -212,20 +190,17 @@ def _modeling(m):
     import sys
     return sys.modules[type(m).__module__]
 
-
 def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rate=None,
                      reference_codes=None, reference_text=None, max_new_tokens=2048,
                      temperature=1.0, top_p=None, top_k=None, label="", attempt=(1, 1)):
     """Точная копия HiggsMultimodalQwen3.generate_speech, но цикл наш →
     (а) живой прогресс по фреймам в терминал (tqdm); (б) отмена НА УРОВНЕ инференса —
     флаг _CANCEL проверяется каждый токен и рвёт реальный AR-цикл немедленно.
-
     Возвращает (audio_tensor_cpu_f32 | пустой, was_cancelled: bool).
     """
     global _FRAMES_PER_SEC
     import time
     import torch
-
     # Резолв внутренностей модели; если remote-API сдвинулся — честный фоллбек на штатный метод.
     try:
         mod = _modeling(m)
@@ -246,12 +221,10 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
             kw["reference_audio"] = reference_audio
             kw["reference_sample_rate"] = reference_sample_rate
         return m.generate_speech(text, tok, **kw), False
-
     device, name, vram = detect_device()
     dev_str = f" [на {name}]"
     att = f" · попытка {attempt[0]}/{attempt[1]}" if attempt[1] > 1 else ""
     print(f"[gen] >> синтез{dev_str}: {label}{att}", flush=True)
-
     with torch.no_grad():
         delayed_ref = None
         if reference_codes is not None:
@@ -260,7 +233,6 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
             sr = reference_sample_rate or m.config.sample_rate
             codes_TN = m._encode_reference(reference_audio, sr)
             delayed_ref = apply_delay_pattern(codes_TN.cpu())
-
         prompt_ids = m._build_prompt_ids(
             tok, text,
             num_ref_tokens=0 if delayed_ref is None else delayed_ref.shape[0],
@@ -271,7 +243,6 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
         past = out.past_key_values
         hidden_last = out.last_hidden_state[:, -1, :]
         position = inputs_embeds.shape[1]
-
         state = _SamplerState(num_codebooks=N)
         rows = []
         cancelled_mid = False
@@ -282,7 +253,6 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
                        dynamic_ncols=True, leave=False, ascii=True)
         except Exception:
             bar = None
-
         for step in range(int(max_new_tokens)):
             if _CANCEL:  # ← ОТМЕНА НА УРОВНЕ ИНФЕРЕНСА: рвём реальный цикл генерации
                 cancelled_mid = True
@@ -292,7 +262,6 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
             if state.generation_done:
                 break
             rows.append(codes_N.cpu())
-
             if bar is not None:
                 bar.update(1)
                 if _FRAMES_PER_SEC and step % 16 == 0:
@@ -300,7 +269,6 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
             elif step % 64 == 0 and step:
                 el = time.time() - t0
                 print(f"[gen]   {step} фреймов · {step / max(el, 1e-3):.0f} фрейм/с", flush=True)
-
             step_embed = m.audio_embedding(codes_N.unsqueeze(0)).unsqueeze(1)
             cache_pos = torch.tensor([position], device=m.device)
             out = m.model(inputs_embeds=step_embed.to(inputs_embeds.dtype),
@@ -308,29 +276,24 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
             past = out.past_key_values
             hidden_last = out.last_hidden_state[:, -1, :]
             position += 1
-
         if bar is not None:
             bar.close()
         el = time.time() - t0
-
         if cancelled_mid:
             print(f"[gen] STOP прервано на {len(rows)} фреймах ({el:.1f}с)", flush=True)
             return torch.zeros(0, dtype=torch.float32), True
         if len(rows) < N:
             print(f"[gen] пусто ({len(rows)} фреймов < {N})", flush=True)
             return torch.zeros(0, dtype=torch.float32), False
-
         delayed_LN = torch.stack(rows, dim=0)
         codes_TN = reverse_delay_pattern(delayed_LN)
         audio = m._decode_codes(codes_TN)
-
     sec = audio.shape[-1] / SR
     if sec > 0.05:
         _FRAMES_PER_SEC = len(rows) / sec  # калибровка оценки секунд для следующих генераций
     print(f"[gen] OK {len(rows)} фреймов -> {sec:.1f}с аудио за {el:.1f}с ({len(rows) / max(el, 1e-3):.0f} фрейм/с)",
           flush=True)
     return audio, False
-
 
 def generate(text, ref_audio=None, ref_text=None, temperature=1.0, top_p=0.95,
              top_k=50, max_new_tokens=2048, seed=-1):
@@ -373,11 +336,9 @@ def generate(text, ref_audio=None, ref_text=None, temperature=1.0, top_p=0.95,
         print(f"[gen] разнос {sec:.1f}s > {limit_sec:.1f}s — повтор {a + 2}/{attempts}", flush=True)
     return SR, audio.detach().cpu().numpy().astype(np.float32)
 
-
 TARGET_LUFS = -16.0              # стандарт подкастов/TTS (EBU R128, Google Assistant)
 _PEAK_CEIL = 10 ** (-1.0 / 20)   # −1 dBFS — защита микса от клиппинга
 _MAX_GAIN = 10 ** (20.0 / 20)    # не разгонять тихий фрагмент сильнее +20 dB (мусор/тишина)
-
 
 def _loudness_normalize(x, sr=SR):
     """Фрагмент → целевая громкость, чтобы спикеры в миксе звучали ровно (один не тише другого).
@@ -399,14 +360,12 @@ def _loudness_normalize(x, sr=SR):
         return x
     return (x * min((10 ** (-20.0 / 20)) / rms, _MAX_GAIN)).astype(np.float32)
 
-
 def _peak_limit(x, ceil=_PEAK_CEIL):
     import numpy as np
     if x.size == 0:
         return x
     peak = float(np.max(np.abs(x)))
     return (x * (ceil / peak)).astype(np.float32) if peak > ceil else x
-
 
 def _concat(chunks, gap=0.3, normalize=True):
     """Склейка фрагментов с паузой. normalize=True выравнивает громкость спикеров
@@ -425,7 +384,6 @@ def _concat(chunks, gap=0.3, normalize=True):
         out.append(c)
     mix = np.concatenate(out)
     return _peak_limit(mix) if normalize else mix
-
 
 def synth_longform(paragraphs, ref_audio=None, ref_text=None, **kw):
     """Длинный текст по абзацам. Первый кусок задаёт голос, его аудио — референс для остальных."""
@@ -447,7 +405,6 @@ def synth_longform(paragraphs, ref_audio=None, ref_text=None, **kw):
             sf.write(f.name, a, SR)
             chain_ref, chain_txt = f.name, para
     return SR, _concat(chunks)
-
 
 def synth_turns(turns, gap=0.4, **kw):
     """turns: [{'text','ref_audio','ref_text'}] — у каждого спикера свой голос через его референс."""
