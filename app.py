@@ -154,7 +154,7 @@ BRAND_HTML_RU = _brand(
     "Higgs Audio v3.1 (100+ языков) + FireRedTTS3 (24+ языков) · Клонирование · Voice Design · Speech Edit · AI-режиссёр"
 )
 BRAND_HTML_EN = _brand(
-    "Higgs Audio v3.1 (100+ languages) + FireRedTTS3 (24+ languages) · Voice Cloning · Voice Design · Speech Edit · AI Director"
+    "Higgs Audio v3.1 (100+ languages) + FireRedTTS3 (24+ languages) · Cloning · Voice Design · Speech Edit · AI Director"
 )
 
 
@@ -357,8 +357,15 @@ HEAD_SCRIPT = """
   };
 
   var RU_TO_EN = {
+    "Higgs Audio v3.1 (100+ языков) + FireRedTTS3 (24+ языков) · Клонирование · Voice Design · Speech Edit · AI-режиссёр": "Higgs Audio v3.1 (100+ languages) + FireRedTTS3 (24+ languages) · Cloning · Voice Design · Speech Edit · AI Director",
+    "Higgs Audio v3.1 (100+ языков) + FireRedTTS3 (24+ языков) · Voice Cloning · Voice Design · Speech Edit · AI-режиссёр": "Higgs Audio v3.1 (100+ languages) + FireRedTTS3 (24+ languages) · Cloning · Voice Design · Speech Edit · AI Director",
+    "Higgs Audio v3.1 (100+ языков) + FireRedTTS3 (24+ языков) · Cloning · Voice Design · Speech Edit · AI-режиссёр": "Higgs Audio v3.1 (100+ languages) + FireRedTTS3 (24+ languages) · Cloning · Voice Design · Speech Edit · AI Director",
     "Higgs Audio v3.1 (100+ языков, Эмоции & Режиссёр)": "Higgs Audio v3.1 (100+ Languages, Emotions & Director)",
     "FireRedTTS3 (24 языка, Voice Design, Редактирование речи)": "FireRedTTS3 (24 Languages, Voice Design, Speech Edit)",
+    "Higgs Audio v3.1 (100+ языков)": "Higgs Audio v3.1 (100+ languages)",
+    "FireRedTTS3 (24+ языков)": "FireRedTTS3 (24+ languages)",
+    "FireRedTTS3 (24 языка)": "FireRedTTS3 (24 languages)",
+    "AI-режиссёр": "AI Director",
     "Озвучка": "TTS",
     "Экспрессия + Режиссёр": "Expressive + Director",
     "Клонирование": "Cloning",
@@ -535,6 +542,10 @@ HEAD_SCRIPT = """
           }
         }
       });
+      var brandSub = (root || document).querySelector('.brand-subtitle');
+      if (brandSub) {
+        brandSub.textContent = "Higgs Audio v3.1 (100+ languages) + FireRedTTS3 (24+ languages) · Cloning · Voice Design · Speech Edit · AI Director";
+      }
     } catch(e) {}
   }
 
