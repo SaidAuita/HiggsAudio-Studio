@@ -549,30 +549,33 @@ HEAD_SCRIPT = """
     } catch(e) {}
   }
 
-  // Ensure all tab buttons in sub-tabs stay unhidden on initial load, tab change, and resize
+  var _isTranslating = false;
   function ensureAllTabsVisible() {
-    document.querySelectorAll('.sub-tabs [role="tablist"] > button, .sub-tabs .tab-nav > button').forEach(function(b) {
-      if (b.classList.contains('overflow-menu-button') || b.getAttribute('aria-label') === 'More' || b.getAttribute('aria-haspopup') === 'menu' || b.textContent.trim() === '…' || b.textContent.trim() === '...') {
-        b.style.setProperty('display', 'none', 'important');
-      } else {
-        if (b.hasAttribute('hidden')) b.removeAttribute('hidden');
-        if (b.style.display === 'none') b.style.setProperty('display', 'inline-flex', 'important');
-      }
-    });
-    translateDom();
+    if (_isTranslating) return;
+    _isTranslating = true;
+    try {
+      document.querySelectorAll('.sub-tabs [role="tablist"] > button, .sub-tabs .tab-nav > button').forEach(function(b) {
+        if (b.classList.contains('overflow-menu-button') || b.getAttribute('aria-label') === 'More' || b.getAttribute('aria-haspopup') === 'menu' || b.textContent.trim() === '…' || b.textContent.trim() === '...') {
+          b.style.setProperty('display', 'none', 'important');
+        } else {
+          if (b.hasAttribute('hidden')) b.removeAttribute('hidden');
+          if (b.style.display === 'none') b.style.setProperty('display', 'inline-flex', 'important');
+        }
+      });
+      translateDom();
+    } catch(e) {}
+    finally {
+      setTimeout(function() { _isTranslating = false; }, 120);
+    }
   }
 
   setTimeout(ensureAllTabsVisible, 100);
   setTimeout(ensureAllTabsVisible, 300);
-  setTimeout(ensureAllTabsVisible, 800);
-  setTimeout(ensureAllTabsVisible, 1500);
+  setTimeout(ensureAllTabsVisible, 600);
+  setTimeout(ensureAllTabsVisible, 1200);
   window.addEventListener('resize', ensureAllTabsVisible);
-  window.addEventListener('click', function(){ setTimeout(ensureAllTabsVisible, 50); });
-
-  try {
-    var tabObserver = new MutationObserver(function() { ensureAllTabsVisible(); });
-    tabObserver.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['hidden', 'style', 'class'], childList: true });
-  } catch(e) {}
+  window.addEventListener('click', function(){ setTimeout(ensureAllTabsVisible, 40); });
+  document.addEventListener('DOMContentLoaded', ensureAllTabsVisible);
 })();
 </script>
 """
