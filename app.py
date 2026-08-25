@@ -1923,6 +1923,15 @@ def _build_batch_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, p
 
 
 def build():
+    def _safe_tab_idx(evt):
+        if evt is None:
+            return None
+        if hasattr(evt, "index") and evt.index is not None:
+            return evt.index
+        if isinstance(evt, (int, float)):
+            return int(evt)
+        return None
+
     llm_cfg = load_llm_config()
     gui_cfg = load_gui_config()
     with gr.Blocks(title=APP_NAME, css=CSS, head=HEAD_SCRIPT, js=DARK_JS) as demo:
@@ -1997,7 +2006,7 @@ def build():
                         _build_audiobook_panel(ENGINE_HIGGS, model_dd=h_model_dd, gui_cfg=gui_cfg)
                     with gr.Tab(T("tab_batch"), id=6):
                         _build_batch_panel(ENGINE_HIGGS, model_dd=h_model_dd, gui_cfg=gui_cfg, prefix="bt_h")
-                h_subtabs.select(lambda evt: update_gui_config("h_subtab", evt.index), None, None)
+                h_subtabs.select(lambda evt: (update_gui_config("h_subtab", _safe_tab_idx(evt)) if _safe_tab_idx(evt) is not None else None), None, None, queue=False)
 
             # =========================================================================
             # Вкладка 2: FireRedTTS3 (24 языка, Voice Design, Редактирование речи)
@@ -2024,12 +2033,14 @@ def build():
                         _build_audiobook_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd, gui_cfg=gui_cfg)
                     with gr.Tab(T("tab_batch"), id=7):
                         _build_batch_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd, gui_cfg=gui_cfg, prefix="bt_fr")
-                fr_subtabs.select(lambda evt: update_gui_config("fr_subtab", evt.index), None, None)
+                fr_subtabs.select(lambda evt: (update_gui_config("fr_subtab", _safe_tab_idx(evt)) if _safe_tab_idx(evt) is not None else None), None, None, queue=False)
 
-        def on_engine_tab_select(evt: gr.SelectData):
-            update_gui_config("active_engine_index", evt.index)
+        def on_engine_tab_select(evt=None):
+            idx = _safe_tab_idx(evt)
+            if idx is not None:
+                update_gui_config("active_engine_index", idx)
 
-        engine_tabs.select(on_engine_tab_select, None, None)
+        engine_tabs.select(on_engine_tab_select, None, None, queue=False)
 
     return demo
 
