@@ -1,222 +1,146 @@
 <div align="center">
 
-# Higgs Audio Studio
+# 🎙️ Higgs Audio Studio & FireRedTTS3
 
 <!-- super-markdown-toc -->
 
 ## Table of Contents
 
-* [Higgs Audio Studio](#higgs-audio-studio)
+* [Higgs Audio Studio & FireRedTTS3](#higgs-audio-studio--fireredtts3)
   + [Features](#features)
+  + [Dual-Engine Architecture](#dual-engine-architecture)
   + [System Requirements](#system-requirements)
-    - [Platforms (via the Pinokio launcher)](#platforms-via-the-pinokio-launcher)
-    - [Memory (NVIDIA; TTS is quantized on the fly, the LLM director loads separately)](#memory-nvidia-tts-is-quantized-on-the-fly-the-llm-director-loads-separately)
+    - [Platforms](#platforms)
+    - [Memory and Quantization](#memory-and-quantization)
   + [Quick Start](#quick-start)
-  + [Other Projects by @timoncool](#other-projects-by-timoncool)
-  + [Authors](#authors)
-  + [Acknowledgments](#acknowledgments)
+  + [Fork Additions and Updates](#fork-additions-and-updates)
+  + [Authors & Acknowledgments](#authors--acknowledgments)
   + [License](#license)
-  + [Update 3.1](#update-31)
-    - [Added in this fork:](#added-in-this-fork)
-    - [Quick Start for v3.1:](#quick-start-for-v31)
-  + [Support this fork](#support-this-fork)
+  + [Support this Project](#support-this-project)
 <!-- /super-markdown-toc -->
 
-**Portable local text-to-speech built on Higgs Audio v3 TTS — expressive speech in 100+ languages, zero-shot voice cloning, an AI text director, plus Podcast and Audiobook modes. 100% offline, one click.**
+**Next-generation local speech synthesis and voice cloning studio: uniting the expressive power of Higgs Audio v3.1 and the pristine precision of FireRedTTS3. 100% offline, one-click portable runtime.**
 
 [![License](https://img.shields.io/badge/license-Research_%26_Non--Commercial-orange?style=flat-square)](#license)
-
-[![Stars](https://img.shields.io/github/stars/timoncool/HiggsAudio-Studio?style=flat-square)](https://github.com/timoncool/HiggsAudio-Studio/stargazers)
-
-[![Last Commit](https://img.shields.io/github/last-commit/timoncool/HiggsAudio-Studio?style=flat-square)](https://github.com/timoncool/HiggsAudio-Studio/commits/main)
+[![Stars](https://img.shields.io/github/stars/SaidAuita/HiggsAudio-Studio?style=flat-square)](https://github.com/SaidAuita/HiggsAudio-Studio/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/SaidAuita/HiggsAudio-Studio?style=flat-square)](https://github.com/SaidAuita/HiggsAudio-Studio/commits/main)
 
 **[English](README.md)** · **[Русский](README_RU.md)**
 
-<img src="docs/screenshot-en.png" alt="Higgs Audio Studio — English UI" width="600"/>
+<img src="docs/screenshot-en.png" alt="Higgs Audio Studio — English UI" width="800"/>
 
 </div>
 
-> 🚀 **One-click cross-platform install via [Pinokio](https://pinokio.co):**
-
-> [![Install on Pinokio](https://img.shields.io/badge/🚀_Install_on-Pinokio-7c3aed?style=for-the-badge)](https://pinokio.co/item?uri=https://github.com/timoncool/HiggsAudio-Studio-pinokio)
-
-> [![Open in Pinokio](https://img.shields.io/badge/📂_Open_in-Pinokio-6d28d9?style=for-the-badge)](https://beta.pinokio.co/apps/github-com-timoncool-higgsaudio-studio-pinokio)
-
-> 
-
-> Works on **Windows / Linux (x64 & aarch64) / macOS** · NVIDIA / AMD / Apple Silicon / CPU. No `install.bat` — Pinokio sets up CUDA, Python 3.12, PyTorch and dependencies for you. Launcher: **[timoncool/HiggsAudio-Studio-pinokio](https://github.com/timoncool/HiggsAudio-Studio-pinokio)**
-
-Generate expressive speech in 100+ languages, clone any voice from a reference clip, let a local LLM direct the delivery, and produce full **podcasts** and **audiobooks** — entirely on your machine. **100% offline**, no cloud, no API keys. Everything lives inside the folder: Python, dependencies, models, cache. Delete the folder — the app is gone.
-
-Built on [Higgs Audio v3 TTS](https://huggingface.co/bosonai/higgs-audio-v3-tts-4b) by Boson AI — a 4B expressive TTS model with native multi-speaker and inline emotion/prosody control.
+---
 
 ## Features
 
-* *  *🎙️ TTS*  * — text → speech, 100+ languages; temperature, top-p/k, seed lock; autoplay; *  *⏹ Stop* * interrupts generation on the fly (at the inference level); per-frame progress in the terminal.
+* **🎙️ Dual-Engine Architecture** — switch on the fly between **Higgs Audio v3.1** (theatrical emotions, sighs, laughter, 43 inline tags) and **FireRedTTS3** (crystal-clear audio, 10-step DiT Flow Matching, zero hallucinations).
+* **🧬 Zero-Shot Voice Cloning** — clone any voice from a short reference audio clip (3–6 seconds) with automatic transcript recognition (Moonshine ASR). Full support for cross-lingual cloning (e.g. Russian reference ➔ English speech).
+* **🎨 Voice Design** — generate brand new voices from descriptive natural-language prompts («*A warm, confident male voice in his 30s speaking Russian at a steady pace*»).
+* **✂️ Speech Editing** — modify, insert, or delete words in existing audio without re-recording, with fine-grained control over speed, pitch, and volume.
+* **🎭 Expressive Speech & AI Director** — insert 43 inline emotion tags (`<|emotion:happy|>`), sound effects (`<|sfx:laughter|>`), prosody, and style controls + auto-enrichment via local LLM or External API (LM Studio, Ollama, OpenAI).
+* **🧬 Long Voice Cloning** — voice-over for large books and chapters with sentence chunking, step-by-step synthesis, seamless concatenation, customizable gaps, and auto-increment file numbering (`01.mp3`, `02.mp3`...).
+* **🎬 Podcast & Audiobook Studio** — multi-speaker casting, script generation, and role attribution with standard EBU R128 loudness leveling (LUFS −16).
+* **📦 Batch Processing** — mass synthesis of multiple text lines with live progress tracking.
+* **🔇 Intelligent VAD Tail Cleaning** — `trim_trailing_artifacts` filter completely removes vocoder clicks, trailing diffusion noise, and hallucinations on single words and short phrases.
+* **🌐 100% Bilingual Interface (RU 🇷🇺 / EN 🇬🇧)** — real-time client-side language switching without page reloads.
+* **💾 Full GUI State Persistence** — automatically saves and restores selected engine, sub-tabs, presets, quantization mode (`bf16`, `8-bit`, `4-bit`, `fp32`), and parameters across app restarts.
 
-* *  *🎭 Expression + 🤖 Director*  * — insert control tags ( `<|emotion|> `, ` <|sfx|> `, ` <|prosody|> `, ` <|style|>` ) with buttons + an *  *Enrich* * button: a lightweight local LLM normalizes the text and places emotion/sound/prosody tags by meaning.
+---
 
-* *  *🧬 Voice cloning* * — zero-shot from a reference clip with auto-transcription (Moonshine ASR); preset library + on-demand Russian voice pack.
+## Dual-Engine Architecture
 
-* *  *🎬 Podcast / Dialogue*  * — the LLM writes a multi-speaker script, each speaker its own voice → stitched with *  *loudness leveling across speakers* * (LUFS −16, podcast standard — no speaker quieter than another).
+| Parameter | 🎙️ Higgs Audio v3.1 | 🔥 FireRedTTS3 |
+| :--- | :--- | :--- |
+| **Developer** | Boson AI | FireRedTeam / Xiaohongshu |
+| **Architecture** | 4B Autoregressive Transformer + Vocoder | Qwen3 1.7B + 10-step DiT Flow Matching + RedAE + CAM++ |
+| **Quantization** | `bf16`, `8-bit (INT8)`, `4-bit (NF4)`, `fp32` | `bf16`, `8-bit (INT8)`, `fp32` |
+| **Languages** | 100+ languages (expressive focus) | 24 languages (Russian, English, German, French, Spanish, Chinese, Japanese, etc.) |
+| **Key Strengths** | 43 emotion/SFX tags, theatrical acting, AI Director | Pristine clarity, instant Voice Design, Speech Edit, stability |
+| **Modes** | TTS, Expressive, Clone, Long Clone, Podcast, Book, Batch | TTS, Clone, Voice Design, Speech Edit, Long Clone, Podcast, Book, Batch |
 
-* *  *📚 Audiobook* * — narrator/character attribution with a persistent roster (same character = same voice), long-form with timbre carry-over + loudness normalization.
-
-* *  *📦 Batch* * — a list of texts → mass synthesis with a live log.
-
-* *  *💾 Output format* * — WAV / MP3 / FLAC / OGG; results saved to `output/` with timestamps.
-
-**43 control tags:** 21 emotions, 10 prosody, 3 styles, 9 sounds. **AI director** — switchable model: Qwen3.5-9B (default) / Gemma-3-12B / Qwen3.5-4B, on-the-fly quantization (⚗️ experimental), auto by VRAM. **RU / EN** UI.
+---
 
 ## System Requirements
 
-### Platforms (via the Pinokio launcher)
+### Platforms
 
 | OS | GPU | Status | Acceleration |
-
 |---|---|---|---|
+| Windows 10/11 | NVIDIA RTX 30xx–50xx | ✅ tested | CUDA 12.8 / 12.6 + Triton / SDPA |
+| Windows 10/11 | NVIDIA RTX 20xx / GTX 16xx | ✅ supported | CUDA 12.6 / 11.8 |
+| Windows / Linux | CPU only | ✅ supported | Streaming CPU synthesis |
 
-| Windows 10/11 | NVIDIA RTX 30xx–50xx | ✅ tested | CUDA 12.8 + Triton (torch.compile ~2×) |
+### Memory and Quantization
 
-| Windows 10/11 | NVIDIA RTX 20xx | ✅ expected | CUDA 12.8 + Triton |
+| VRAM | TTS Mode | Director / LLM Mode |
+|:---|:---|:---|
+| **24 GB+** | `bf16` (~11 GB) | 9–12B in 4-bit (~6–8 GB) |
+| **12–16 GB** | `bf16` / `8-bit` (~6–8 GB) | 4–9B in 4-bit (~3–6 GB) |
+| **6–8 GB** | `8-bit` / `4-bit` (~3.5–6 GB) | 2–4B in 4-bit / External API |
+| **CPU** | `💻 Use CPU only` mode | Runs entirely on CPU without GPU |
 
-| Linux x64 | NVIDIA RTX 20xx–50xx | ✅ expected | CUDA 12.8 + Triton |
-
-| Linux aarch64 | NVIDIA DGX Spark / Jetson | ✅ expected | CUDA 13.0 |
-
-| Windows | AMD RDNA3+ | ✅ expected | DirectML |
-
-| Linux | AMD RDNA3+ | ✅ expected | ROCm 6.3 |
-
-| macOS | Apple Silicon M1–M4 | ✅ expected | MPS |
-
-| macOS | Intel | ⚠️ CPU only | torch CPU |
-
-| Any | CPU only | ⚠️ very slow | CPU |
-
-> Higgs uses PyTorch SDPA (flash kernels built in) and does not need external Flash-Attention 2. The local `install.bat` build targets NVIDIA Windows; full cross-platform support is via [Pinokio](https://github.com/timoncool/HiggsAudio-Studio-pinokio).
-
-### Memory (NVIDIA; TTS is quantized on the fly, the LLM director loads separately)
-
-| VRAM | TTS mode | LLM director |
-
-|------|----------|--------------|
-
-| 24 GB+ | bf16 (~11 GB) | 9–12B in 4-bit (~6–8 GB) |
-
-| 12 GB | 8-bit (~6–7 GB) | 4–9B in 4-bit (~3–6 GB) |
-
-| 6–8 GB | 4-bit (~3.5 GB) | 2–4B in 4-bit (~1.5–3 GB) |
-
-| CPU | works, very slow | — |
-
-Models (~9 GB TTS + LLM) download automatically on first run.
+---
 
 ## Quick Start
 
-1. **Download** this repository.
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/SaidAuita/HiggsAudio-Studio.git
+   cd HiggsAudio-Studio
+   ```
 
-2. **Install** — run ** `install.bat` **, pick your GPU (CUDA 11.8 / 12.6 / 12.8 or CPU). It sets up portable Python, PyTorch and dependencies.
+2. **Install:**
+   * Run `install.bat` and select your GPU CUDA version (CUDA 12.8, 12.6, 11.8 or CPU).
+   * The installer configures a portable Python 3.12 environment with PyTorch and all dependencies.
 
-3. **Run** — run ** `run.bat ` **; the app opens in the browser, models download on first launch. Update with ** ` update.bat` **.
+3. **Launch:**
+   * Run `run.bat`.
+   * The app opens automatically in your browser at `http://127.0.0.1:7860`.
+   * On first launch, model weights will be downloaded automatically into `models/`.
 
-Or install one-click cross-platform via [Pinokio](https://pinokio.co/item?uri=https://github.com/timoncool/HiggsAudio-Studio-pinokio) — no `install.bat` needed.
+---
 
-## Other Projects by [@timoncool](https://github.com/timoncool)
+## Fork Additions and Updates
 
-| Project | Description |
+* **FireRedTTS3 Integration**:
+  * Full support for `FireRedTTS3-bf16`, `FireRedTTS3-fp32`, and `FireRedTTS3-int8`.
+  * Integrated **Voice Design** (generating unique voices from text prompts via the Instruct model) and **Speech Edit** (semantic and acoustic audio editing).
+  * Automatic cross-lingual cloning using CAM++ speaker embeddings.
+* **End-of-Speech VAD Cleaning (`trim_trailing_artifacts`)**:
+  * Eliminates vocoder boundary clicks, trailing diffusion noise, and repeating hallucinations on short sentences and single words.
+  * Optimized diffusion step calculation, accelerating short-phrase synthesis up to 3.5×.
+* **Process Isolation for RTX 30xx/40xx/50xx**:
+  * Background daemon `director_daemon.py` isolates CUDA contexts between `llama.cpp` and `PyTorch`, preventing crashes.
+* **Long Voice Cloning with Auto-Numbering**:
+  * Batch synthesis for audiobook chapters with automatic file numbering (`01`, `02`, `03`...) saved to `output/NUM/`.
+* **Full Bilingual Support (RU / EN)**:
+  * 100% translation coverage for all UI elements, tabs, dropdowns, examples, and tooltips.
 
-|---------|-------------|
+---
 
-| [VoxCPM2 Portable](https://github.com/timoncool/VoxCPM2_portable) | Multilingual TTS + Voice Design + LoRA fine-tuning |
+## Authors & Acknowledgments
 
-| [Qwen3-TTS](https://github.com/timoncool/Qwen3-TTS_portable_rus) | Portable text-to-speech with voice cloning |
+* **timoncool** — author of the original HiggsAudio-Studio project.
+* **SaidAuita** — author of this fork, FireRedTTS3 integration, dual-engine architecture, VAD filtering, and localization.
+* **Boson AI** — creators of [Higgs Audio v3](https://huggingface.co/bosonai/higgs-audio-v3-tts-4b).
+* **FireRedTeam / Xiaohongshu** — creators of [FireRedTTS3](https://github.com/FireRedTeam/FireRedTTS3).
+* **UsefulSensors** — [Moonshine ASR](https://github.com/usefulsensors/moonshine) reference transcription.
 
-| [ACE-Step Studio](https://github.com/timoncool/ACE-Step-Studio) | AI music studio — songs, vocals, covers, videos |
-
-| [Foundation Music Lab](https://github.com/timoncool/Foundation-Music-Lab) | Music generation + timeline editor |
-
-| [VibeVoice ASR](https://github.com/timoncool/VibeVoice_ASR_portable_ru) | Portable speech recognition |
-
-| [LavaSR](https://github.com/timoncool/LavaSR_portable_ru) | Portable audio enhancement |
-
-| [SuperCaption Qwen3-VL](https://github.com/timoncool/SuperCaption_Qwen3-VL) | Portable image captioning |
-
-| [VideoSOS](https://github.com/timoncool/videosos) | AI video production in the browser |
-
-## Authors
-
-* *  *Nerual Dreming* * — [Telegram](https://t.me/nerual_dreming) | [neuro-cartel.com](https://neuro-cartel.com) | [ArtGeneration.me](https://artgeneration.me)
-
-* *  *Нейро-Софт* * — [Telegram](https://t.me/neuroport) | portable AI builds
-
-## Acknowledgments
-
-* *  *[Boson AI — Higgs Audio v3](https://huggingface.co/bosonai/higgs-audio-v3-tts-4b)* * — the TTS model
-
-* *  *[multimodalart](https://huggingface.co/multimodalart/higgs-audio-v3-tts-4b-transformers)* * — transformers port of the model
-
-* *  *[Slait/russia_voices](https://huggingface.co/datasets/Slait/russia_voices)* * — 743 Russian voice presets
-
-* *  *[Moonshine ASR](https://github.com/usefulsensors/moonshine)* * — reference auto-transcription
-
-* *  *[pyloudnorm](https://github.com/csteinmetz1/pyloudnorm)* * — EBU R128 loudness leveling
-
-* *  *[Gradio](https://gradio.app/)* * — UI framework
+---
 
 ## License
 
-The wrapper code is open-source. **The Higgs Audio v3 weights are distributed by Boson AI under a Research & Non-Commercial license** — this application is non-commercial. Voice cloning is allowed only with the consent of the voice owner; impersonation, fraud, and any illegal use are strictly prohibited. See the [model card](https://huggingface.co/bosonai/higgs-audio-v3-tts-4b).
+Wrapper code is open-source. Higgs Audio v3 and FireRedTTS3 model weights are provided under Research & Non-Commercial licenses. Voice cloning is allowed strictly with the consent of the voice owner.
 
-## Update 3.1
+---
 
-**timoncool** — original project
+## Support this Project
 
-**SaidAuita** — fork / update author
-
-### Added in this fork:
-
-* *  *🔌 RTX 3090 / 4090 Compatibility* * — process isolation of `llama.cpp ` and ` PyTorch ` via a background daemon process ( ` director_daemon.py` ); eliminates CUDA context conflicts and inference crashes; on-the-fly model unloading to release VRAM.
-
-* *  *🧬 Long Voice Cloning* * — voice-over for extra-long texts and books with automatic sentence chunking, per-chunk enrichment, multi-part synthesis, and subsequent seamless stitching with configurable pause duration.
-
-* *  *🌐 External LLMs* * — global integration with LM Studio / Ollama / OpenAI API ( `External API` ); redirects auto-enrichment from all tabs to the external model; custom AI-director system prompt.
-
-* *  *🧪 Connection Test* * — quick connection test button for the external API and prompt editor with detailed error code output to the GUI.
-
-* *  *💾 GUI Settings Auto-Save* * — automatic saving and loading of all selected parameters (models, voices, temperature/top-p sliders) between app restarts to a local `gui_config.json`.
-
-* *  *💻 CPU-Only Mode* * — toggle in the GUI for processing both TTS and LLM on the CPU (no GPU), which completely releases VRAM.
-
-* *  *⚡ Keep Models in VRAM* * — "⚡ Keep models in VRAM" option for instantaneous subsequent runs without reload delays (holds TTS and LLM daemon in memory) and RAM-caching of reference voices.
-
-* *  *🌑 True Dark Mode* * — instant forced dark theme application from the first load without white flashing.
-
-### Quick Start for v3.1:
-
-1. Run ** `run.bat` ** as usual. The app will automatically open your browser with the correct localization and dark theme configured.
-
-2. **For faster subsequent runs:** Check the ** `⚡ Keep models in VRAM` ** box at the very top. This keeps the models in video memory. For pure TTS (without the LLM director), a GPU with 6 GB VRAM (like an RTX 3060 Laptop) is sufficient, while 16 GB+ VRAM is recommended when using both models together.
-
-3. **For low-end PCs (no GPU):** Check the ** `💻 Use CPU only` ** box. All processing will shift to the CPU, completely freeing up your graphics card's VRAM.
-
-**Website:** [Ph-CU-S.com](https://ph-cu-s.com) (Photoshop to ComfyUI Plugin)
-
-## Support this fork
-
-If these improvements are useful to you and you'd like to support future development of this fork:
-
-* *  *USDT (TRC20):* * `TBWzmMZWbirvACAtPfoZioAhhwSM4n2ArY`
-
-## Long Cloning Updates
-
-- **Top Synthesize Button**: Added a dedicated top "Synthesize" button above the text area for quick generation without scrolling down.
-- **Custom Sequential Numbering**:
-  - Automatically saves output audio files to `output/NUM/<number>.<ext>`.
-  - Preserves zero-padding width (e.g., `01` -> `02`, `005` -> `006`).
-  - Checks for existing files and displays `gr.Warning()` alerts before generation starts.
-  - Automatically increments file number by +1 upon successful synthesis.
-- **Clean UI Generation**:
-  - Grouped custom number controls into a harmonious single-line block matching standard Gradio component height.
+If this project is helpful to you and you wish to support its development:
+* **USDT (TRC20):** `TBWzmMZWbirvACAtPfoZioAhhwSM4n2ArY`
+* **Website:** [Ph-CU-S.com](https://ph-cu-s.com) (Photoshop to ComfyUI Plugin)
+ - Grouped custom number controls into a harmonious single-line block matching standard Gradio component height.
   - Removed Gradio component-level progress overlays so input boxes and number controls remain clutter-free.
 

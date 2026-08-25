@@ -15,3 +15,11 @@ cuda_version.txt
 *.log
 .DS_Store
 Thumbs.db
+gui_config.json
+llm_config.json
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.pt
+*.safetensors
