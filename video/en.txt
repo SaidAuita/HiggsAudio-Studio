@@ -1,0 +1,221 @@
+01
+The plugin is designed to send one or more images and prompts to your ComfyUI workflow and returns the processed image back to Photoshop.
+
+02
+If a selection was active, the image is pasted back into the exact same location.
+
+03
+Editing in Lightroom: after color correction in Lightroom, we switch to Photoshop to touch up specific areas (like teeth, for example), then save and continue working in Lightroom.
+
+04
+Here we have batch seed selection, meaning we can choose the seed we like best. The prompt for architecture enhancement removes road signs, people, and wires, and then upscales the image to 2048 pixels.
+
+05
+Here we combine three images into a single picture.
+
+06
+Image restoration: if the image exceeds 4 megapixels, we choose the downscaling mode. I selected 2 megapixels to make sure the generation runs without any issues.
+
+07
+Stylization: we have a bronze figurine and some black text. We select stylization using a prompt, and the plugin styles the letters to look like bronze.
+
+08
+Here is image coloring, and we are putting a t-shirt on the boy. We create a mask, write the prompt "put a t-shirt on the boy"—and here is the result.
+
+09
+This is just a simple Text-to-Image workflow. We load several prompts, and they run in a batch of six. We select the ones we like, enable seed randomization, and choose the best option. In other words, you select the prompt first, then run it multiple times to pick the seed. For example, here are white letters on a pre-selected business card background. We load a text transformation and stylization prompt, and all 30 prompts are processed. You can load 5 slots with 6 prompts each. Click the infinity button next to the auto button, and all 30 prompts will run automatically. Finally, we choose the one we like best.
+
+10
+Manual installation, if you already have ComfyUI installed.
+
+11
+Extract the downloaded archive to the root directory of your drive. You can change the paths in the config later, but in this case, I placed the prompt folder in the root of drive X. In the Photoshop plugins folder, we place the PH-CU-S directory, and in the workflows folder, we place the photoshop folder, which will contain all the working workflows.
+
+12
+And in the custom_nodes folder, we place the node required for the plugin. It runs in ComfyUI, receiving and returning the image. Next, we arrange the plugin panel in the Photoshop interface.
+
+13
+Expand it and check that it is activated. On the first launch, automatic activation should trigger. If activation fails (for example, if a firewall blocks the connection), you will see a message to activate it manually. Just activate it in manual mode.
+
+14
+These are the configuration settings. In the Photoshop interface, open the configuration file and manually edit the path to ComfyUI and the path to the prompts folder. If you want ComfyUI to start automatically, place the autostart file in the root installation folder of ComfyUI.
+
+15
+Here are several prompt sets that you can load—5 slots in total. You can customize the slot names and slot colors.
+
+16
+Right now, a Text-to-Image generation is running. Since autostart is configured, pressing Run automatically launches ComfyUI. Once the message appears saying the web interface is ready, the selected workflow is automatically sent for processing, the prompt is passed to it, and the image is generated.
+
+17
+Let's try another prompt: "business card". Right now, the canvas is square, so the prompt doesn't fit the aspect ratio very well.
+
+18
+If you want to remove the clock, there is an interesting workflow. We create a white mask. You can choose a different color, but we'll stick with white.
+
+19
+And we process the image using this prompt. If the color tone doesn't match perfectly sometimes, you can run a few generations with different seeds and pick the one that is closest to your original image.
+
+20
+Then, using a soft brush on the white mask, paint around the edges to hide the borders. Let me show you.
+
+21
+So, you paint on the mask with a soft brush, and you get a smooth transition between your image and the background.
+
+22
+Automatic installation. The only issue is that for the Flux 2 Klein model, you need to accept the license agreement. Therefore, you first need to go to the Hugging Face website, register, and download the required file.
+
+23
+Let's go here.
+
+24
+Here is the file itself, download it.
+
+25
+Once it's downloaded, you can run the script.
+
+26
+You need to extract the archive to the root of the target drive—where you will be installing ComfyUI. You should have at least 30 gigabytes of free space. This is required to run ComfyUI with the Flux 2 Klein model.
+
+27
+Step one is installing ComfyUI. Here we have an installation script configured from Pixarama. Let's wait for it to finish.
+
+28
+Let's speed up the installation process. ComfyUI is installed.
+
+29
+When you choose the first option, it installs Flux 2 Klein and all its dependencies, registers the plugin in Photoshop, configures the backend in ComfyUI, copies the prompts folder to the target drive, and configures the settings file so that everything works automatically right away. The configuration file specifies the path—in this case, pointing to drive X.
+
+30
+First launch.
+
+31
+It is best to check the "Remember choice" box. ComfyUI will start up—you can run it separately or launch it directly from the Photoshop interface.
+
+32
+Once the GUI address is displayed, the plugin will be able to send prompts and images to ComfyUI for processing. Currently, the Text-to-Image workflow is running. We need to wait for the model to load.
+
+33
+Processing has started, steps 0 to 8. This is the step count.
+
+34
+The indicator corresponds to the steps in the image generation workflow.
+
+35
+For the business card, we choose a size of 94 by 54 millimeters, plus 2 millimeters of bleed.
+
+36
+We generate the business card background at this size.
+
+37
+As an example, let's type some text.
+
+38
+Suppose you want to style it somehow. You can load a preset set of prompts for text stylization.
+
+39
+You can cycle through the prompts: there are 5 slots, each containing 6 unique prompts.
+
+40
+We select the Canvas section and the Flux 2 Klein 1+0 workflow. The first number "1" means that your image from Photoshop goes to generation, and "+0" means additional images that can be connected if they are present in the workflow.
+
+41
+Let's say you want to try some other prompts. The only thing I forgot to do is disable the seed, so it is locked at 8888, but the prompts will still change. Now, it will cycle through prompts one to three automatically. In Photoshop, you can look at the layer names: they show the model name, the slot number, and the prompt number. There you go, take a look.
+
+42
+The next feature is Outpaint (uncrop), which extends the borders of the image. For example, I want to add 20 millimeters at the top and expand the image itself.
+
+43
+Now, I'll load the test prompts. I have a prompt that replaces the white area and fills it based on context. I want to fill it with glowing lights on a blue background. We launch the workflow with the selection: Flux 2 Klein 1+0.
+
+44
+We get a decent, filled image. Next, I enable the text.
+
+45
+This is just standard black text, and I want to style it—make it gold. In Photoshop, of course, you could apply some gradient, but using AI generation allows for much more interesting effects.
+
+46
+You can select the text using either a rectangular selection or the Selection Brush tool. Next, I load the prompts from the "black to golden style" file, which contains 30 prompts. Now, each slot has specific styles defined. Let's start the generation for the first slot (6 images). The process has started, and we get a nice gold foil effect.
+
+47
+There are also options with embossed letters—that's also an interesting effect, complete with stars. Choose the one you like best. In this case, I decided to toggle the infinity icon in the prompts, which means it will cycle through and automatically switch to the next slot. I set the count to 12: prompts one through six for the second slot will load, and then it will automatically move to the third slot and run another six prompts. So, all 12 generations will run automatically.
+
+48
+Next, choose the ones you like best. For example, I deleted the extra layers, leaving 4 images, and I'm picking the best one among them. I selected one image. Now, I find the second slot, prompt number four, and run 4 generations with it, looking for variations. I find the image I like best and turn off everything else.
+
+49
+And then we can fine-tune it a bit. I take a mask from the black text to make a selection, and hold Shift to select from both layers at once.
+
+50
+And then using Curves, I pull them up, applying curves only to the layer below to make it brighter.
+
+51
+Now, as for custom workflows and how you can connect them. I will show you using the built-in workflow from Pixarama as an example. It's the simplest one, using an SDXL model that is 2 GB in size. You should download it and place it in this folder beforehand.
+
+52
+And how do you connect the plugin to this workflow? Search for "PH-" and add all the nodes—there are only 3 of them: input, output, and seed.
+
+53
+For the input node, only the prompt is connected in this case—meaning neither the canvas nor any additional images are needed here.
+
+54
+Connect the seed, and the seed goes into the seed text field in KSampler.
+
+55
+Accordingly, the output connects to the PH-Output node.
+
+56
+We also need to pass the image dimensions—width and height.
+
+57
+Save this workflow.
+
+58
+Next, the workflow needs to be placed in the "photoshop" folder where workflows are saved, so that the plugin can load it.
+
+59
+Find the path: users -> default -> workflows -> Getting Started. This is where we found the workflow.
+
+60
+Copy it to the clipboard.
+
+61
+And in the "photoshop" folder, since it is a Text-to-Image workflow, simply paste it here.
+
+62
+Then, in the plugin interface, click the "Update Workflows" button. Now, this workflow is available for generation.
+
+63
+Choose some simple text—there are test prompts in the prompts folder.
+
+64
+Set the business card size to 54 by 54.
+
+65
+We'll run one batch—there's no point in running multiple here, we just want to verify that it works.
+
+66
+This is SDXL, a pretty fast model, so generation finishes quickly.
+
+67
+But of course, you need an appropriate prompt. I have a prompt here meant for modern models, but for SDXL, you need to write something else to get decent results. What was generated here doesn't look like a business card background at all.
+
+68
+It just drew two cars.
+
+69
+For comparison, I'll show you the generation with the same prompt, but using the modern Flux 2 Klein workflow set to 8 steps. Let's run it.
+
+70
+Since it is heavier than SDXL, the model needs to load into RAM first, then into video memory, and only then can it start generating. Let's wait.
+
+71
+If your ComfyUI freezes, you can close and restart it. The status dot next to the launch button (which is currently green) might turn yellow or red. Just restart ComfyUI. You can see that modern models perform much better and follow prompts much more accurately than the old SDXL. And as an example, let's try running Zoom.
+
+72
+AI Zoom is selected automatically when you click on the zoom factor. This triggers the Expand function, which expands the canvas in Photoshop. The area where the image is returned increases to match the size of the generated image.
+
+73
+The SeedVR2 workflow is currently selected, and we can watch the upscale process. This is a very modern model that does a good job upscaling. By default, the 3B model is included. If your hardware permits, it's better to open ComfyUI, download a heavier model, and use it instead—the quality will be even higher when upscaling. Here is the size in pixels, you can see it is 4096 pixels on the long side.
+
+74
+That's all for now. In future videos, I'll try to make a clip about network connections (client-server) and a more detailed breakdown of the interface.

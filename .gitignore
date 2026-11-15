@@ -23,3 +23,6 @@ llm_config.json
 *.ogg
 *.pt
 *.safetensors
+*.zip
+что изменилось.txt
+test_director_synthesis.py

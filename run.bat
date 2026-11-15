@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo   Higgs Audio Studio
+echo   Audio Studio TTS
 echo ========================================
 
 set "SCRIPT_DIR=%~dp0"
@@ -32,9 +32,15 @@ set "GRADIO_TEMP_DIR=%SCRIPT_DIR%temp"
 if not exist "%TEMP%" mkdir "%TEMP%"
 
 set "HF_HOME=%SCRIPT_DIR%models"
-set "HUGGINGFACE_HUB_CACHE=%SCRIPT_DIR%models"
+set "HUGGINGFACE_HUB_CACHE=%SCRIPT_DIR%models\hub"
+set "HF_HUB_CACHE=%SCRIPT_DIR%models\hub"
 set "TRANSFORMERS_CACHE=%SCRIPT_DIR%models"
+set "NO_PROXY=127.0.0.1,localhost,0.0.0.0"
+set "no_proxy=127.0.0.1,localhost,0.0.0.0"
+set "HTTP_PROXY=http://127.0.0.1:10809"
+set "HTTPS_PROXY=http://127.0.0.1:10809"
 if not exist "%HF_HOME%" mkdir "%HF_HOME%"
+if not exist "%HUGGINGFACE_HUB_CACHE%" mkdir "%HUGGINGFACE_HUB_CACHE%"
 
 set "TORCH_HOME=%SCRIPT_DIR%models\torch"
 if not exist "%TORCH_HOME%" mkdir "%TORCH_HOME%"

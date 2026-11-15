@@ -5,7 +5,27 @@
 Тяжёлые импорты ленивые (внутри функций) — mock-режим и UI поднимаются без torch.
 """
 import os
-TTS_REPO = "multimodalart/higgs-audio-v3-tts-4b-transformers"
+from pathlib import Path
+
+_BASE_DIR = str(Path(__file__).parent.resolve())
+os.environ.setdefault("HF_HOME", os.path.join(_BASE_DIR, "models"))
+os.environ.setdefault("HUGGINGFACE_HUB_CACHE", os.path.join(_BASE_DIR, "models", "hub"))
+os.environ.setdefault("HF_HUB_CACHE", os.path.join(_BASE_DIR, "models", "hub"))
+os.environ.setdefault("TRANSFORMERS_CACHE", os.path.join(_BASE_DIR, "models"))
+if not os.environ.get("HTTP_PROXY"):
+    os.environ["HTTP_PROXY"] = "http://127.0.0.1:10809"
+if not os.environ.get("HTTPS_PROXY"):
+    os.environ["HTTPS_PROXY"] = "http://127.0.0.1:10809"
+
+def _resolve_tts_repo():
+    snap_dir = Path(__file__).parent / "models" / "models--multimodalart--higgs-audio-v3-tts-4b-transformers" / "snapshots"
+    if snap_dir.exists():
+        snaps = [d for d in snap_dir.iterdir() if d.is_dir()]
+        if snaps:
+            return str(snaps[0].resolve())
+    return "multimodalart/higgs-audio-v3-tts-4b-transformers"
+
+TTS_REPO = _resolve_tts_repo()
 SR = 24000
 _MOCK = bool(os.environ.get("HIGGS_UI_MOCK"))
 _model = None
@@ -78,16 +98,25 @@ def get_tts(precision=None):
                                    llm_int8_skip_modules=skip)
     elif precision == "8bit":
         quant = BitsAndBytesConfig(load_in_8bit=True, llm_int8_skip_modules=skip)
-    _tok = AutoTokenizer.from_pretrained(TTS_REPO)
+    try:
+        _tok = AutoTokenizer.from_pretrained(TTS_REPO, local_files_only=True)
+    except Exception:
+        _tok = AutoTokenizer.from_pretrained(TTS_REPO)
     kw = dict(trust_remote_code=True, dtype=torch.bfloat16)
     if quant is not None:
         kw["quantization_config"] = quant
         kw["device_map"] = "auto"
-    try:  # flash-attention 2, если установлена (ускоритель из install.bat)
-        _model = AutoModelForCausalLM.from_pretrained(TTS_REPO, attn_implementation="flash_attention_2", **kw)
+    try:  # flash-attention 2, если установлена
+        try:
+            _model = AutoModelForCausalLM.from_pretrained(TTS_REPO, attn_implementation="flash_attention_2", local_files_only=True, **kw)
+        except Exception:
+            _model = AutoModelForCausalLM.from_pretrained(TTS_REPO, attn_implementation="flash_attention_2", **kw)
     except Exception as e:
         print(f"[higgs] flash_attention_2 недоступна ({e}); стандартный attention")
-        _model = AutoModelForCausalLM.from_pretrained(TTS_REPO, **kw)
+        try:
+            _model = AutoModelForCausalLM.from_pretrained(TTS_REPO, local_files_only=True, **kw)
+        except Exception:
+            _model = AutoModelForCausalLM.from_pretrained(TTS_REPO, **kw)
     if quant is None and device == "cuda":
         _model = _model.to("cuda")
     _model.eval()
@@ -296,7 +325,7 @@ def _generate_stream(m, tok, text, *, reference_audio=None, reference_sample_rat
     return audio, False
 
 def generate(text, ref_audio=None, ref_text=None, temperature=1.0, top_p=0.95,
-             top_k=50, max_new_tokens=2048, seed=-1):
+             top_k=50, max_new_tokens=2048, seed=-1, **kw):
     """Озвучить один фрагмент. Возвращает (sr, np.float32[L]). ref_audio — путь к файлу."""
     import numpy as np
     text = (text or "").strip()
@@ -335,6 +364,8 @@ def generate(text, ref_audio=None, ref_text=None, temperature=1.0, top_p=0.95,
             break
         print(f"[gen] разнос {sec:.1f}s > {limit_sec:.1f}s — повтор {a + 2}/{attempts}", flush=True)
     return SR, audio.detach().cpu().numpy().astype(np.float32)
+
+synth = generate
 
 TARGET_LUFS = -16.0              # стандарт подкастов/TTS (EBU R128, Google Assistant)
 _PEAK_CEIL = 10 ** (-1.0 / 20)   # −1 dBFS — защита микса от клиппинга

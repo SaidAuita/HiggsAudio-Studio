@@ -5,7 +5,29 @@ Higgs Audio v3.1 TTS + FireRedTTS3 TTS (100+ языков, чистое клон
 """
 import os
 import re
+import socket
+from urllib.parse import urlparse
 import warnings
+
+# Bypass proxy for localhost to prevent Gradio/httpx WinError 10061
+os.environ["NO_PROXY"] = "127.0.0.1,localhost,0.0.0.0"
+os.environ["no_proxy"] = "127.0.0.1,localhost,0.0.0.0"
+
+def _is_proxy_alive(proxy_url: str) -> bool:
+    try:
+        p = urlparse(proxy_url)
+        host = p.hostname or "127.0.0.1"
+        port = p.port or 10809
+        with socket.create_connection((host, port), timeout=0.2):
+            return True
+    except Exception:
+        return False
+
+# If proxy is offline/closed, remove proxy env vars so local calls and HuggingFace cache work smoothly
+for _k in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"]:
+    _val = os.environ.get(_k)
+    if _val and not _is_proxy_alive(_val):
+        del os.environ[_k]
 
 # Suppress deprecation and user warnings in third-party libraries (Gradio/Starlette/Torch)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -63,6 +85,7 @@ import gradio as gr
 
 import higgs_engine as eng
 import firered_engine as fe
+import drama_engine as de
 import director as dr
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
@@ -113,13 +136,14 @@ def save_llm_config(api_url, api_key, api_model, system_prompt):
         return f"Ошибка сохранения / Save error: {e}"
 
 
-APP_NAME = "Higgs Audio Studio & FireRedTTS3"
+APP_NAME = "Audio Studio TTS"
 DEVICE_INFO = eng.device_info()
 MODEL_CHOICES = list(dr.MODELS.keys()) + ["External API (LM Studio / Ollama / OpenAI)"]
 
 ENGINE_HIGGS = "🎙️ Higgs Audio v3.1 (Эмоции & SFX / 4B)"
 ENGINE_FIRERED = "🔥 FireRedTTS3 (Чистый звук / DiT Flow / 24 языка)"
-ENGINE_CHOICES = [ENGINE_HIGGS, ENGINE_FIRERED]
+ENGINE_DRAMA = "🎭 Fish Audio Drama 3 (35B MoE / Режиссура / Hi-Fi 44.1kHz)"
+ENGINE_CHOICES = [ENGINE_HIGGS, ENGINE_FIRERED, ENGINE_DRAMA]
 
 MAX_SPK = 4
 OWN_FILE = "— свой файл / own file —"
@@ -151,10 +175,10 @@ def _brand(subtitle):
 
 
 BRAND_HTML_RU = _brand(
-    "Higgs Audio v3.1 (100+ языков) + FireRedTTS3 (24+ языков) · Клонирование · Voice Design · Speech Edit · AI-режиссёр"
+    "Higgs Audio v3.1 + FireRedTTS3 + Fish Audio Drama 3 · Клонирование · Длинный клон · Voice Design · Speech Edit · AI-режиссёр"
 )
 BRAND_HTML_EN = _brand(
-    "Higgs Audio v3.1 (100+ languages) + FireRedTTS3 (24+ languages) · Cloning · Voice Design · Speech Edit · AI Director"
+    "Higgs Audio v3.1 + FireRedTTS3 + Fish Audio Drama 3 · Cloning · Long Clone · Voice Design · Speech Edit · AI Director"
 )
 
 
@@ -184,6 +208,7 @@ _BOOKFMT_EN = "**Format:** `Speaker 0:` — narrator, `Speaker 1+:` — characte
 _RU = {
     "engine_higgs_tab": "🎙️ Higgs Audio v3.1 (100+ языков, Эмоции & Режиссёр)",
     "engine_firered_tab": "🔥 FireRedTTS3 (24 языка, Voice Design, Редактирование речи)",
+    "engine_drama_tab": "🎭 Fish Audio Drama 3 (35B MoE, Режиссура, Hi-Fi 44.1kHz)",
     "tab_tts": "🎙️ Озвучка", "tab_expr": "🎭 Экспрессия + Режиссёр", "tab_clone": "🧬 Клонирование",
     "tab_design": "🎨 Создание голоса", "tab_edit": "✂️ Редактирование речи",
     "tab_pod": "🎬 Подкаст", "tab_book": "📚 Аудиокнига", "tab_batch": "📦 Пакет",
@@ -218,6 +243,30 @@ _RU = {
     "batch_text": "Список текстов (по одному в строке)", "ph_batch": "Первая фраза.\nВторая фраза.\nТретья фраза.",
     "log": "Лог", "brand_header_html": BRAND_HTML_RU,
     "tab_long_clone": "🧬 Длинный клон",
+    "tab_batch_clone": "🧬 Пакетный клон",
+    "bc_scenario_group": "📄 Сценарий и выбор диапазона (output/NUM)",
+    "bc_upload_btn": "📂 Загрузить .txt",
+    "bc_reload_btn": "🔄 Перечитать",
+    "bc_load_btn": "🎧 Загрузить",
+    "bc_text_label": "Текст выбранного фрагмента (для озвучки / правки)",
+    "bc_text_ph": "Кликните на кнопку фрагмента или укажите номер и нажмите «Загрузить»...",
+    "bc_stats_hint": "💡 Нажмите **«Перечитать»** для проверки диапазона файла сценария.",
+    "bc_file_path": "Файл сценария (.txt)",
+    "bc_lang": "Язык реплик из файла",
+    "bc_from": "С номера",
+    "bc_to": "По номер",
+    "bc_to_end": "До конца файла",
+    "bc_skip_existing": "Пропускать уже существующие файлы в папке NUM",
+    "bc_btn": "🔊 Запустить пакетную озвучку",
+    "bc_scan_btn": "🔍 Сканировать папку NUM",
+    "bc_merge_gap": "Пауза между кусками (сек)",
+    "bc_merge_btn": "🔗 Склеить фрагменты в один файл (напр. 01-33.wav)",
+    "bc_log_label": "Лог пакетной обработки",
+    "bc_merge_group": "🔗 Склеивание фрагментов в папке NUM",
+    "bc_decades_group": "🧭 Навигация по десяткам и выбор фрагмента",
+    "bc_decade_radio_label": "📅 Выберите диапазон (десяток)",
+    "bc_decade_list_label": "Реплики выбранного десятка (клик для проверки / загрузки)",
+    "bc_files_accordion": "📂 Все файлы в папке NUM (список)",
     "max_chars_label": "Макс. длина фрагмента (символов)",
     "max_chars_info": "Оптимально: 150-250. Меньше — рваная интонация, больше — риск сбоев и повторов в конце фрагмента.",
     "gap_label": "Пауза между фрагментами (сек)",
@@ -233,6 +282,7 @@ _RU = {
     "processed_text_label": "📝 Текст после LLM (режиссёра)",
     "cpu_only_label": "💻 Использовать только CPU (без видеокарты)",
     "keep_vram_label": "⚡ Не выгружать модели из памяти (ускоряет повторные запуски)",
+    "save_seed_label": "Запись Seed",
     "lc_custom_num": "Кастомный номер",
     "lc_num_input": "Номер файла",
     "design_hint": "Опишите голос словами (возраст, тембр, эмоции, темп, акцент) и синтезируйте речь с нуля (FireRedTTS3).",
@@ -256,6 +306,7 @@ _RU = {
 _EN = {
     "engine_higgs_tab": "🎙️ Higgs Audio v3.1 (100+ Languages, Emotions & Director)",
     "engine_firered_tab": "🔥 FireRedTTS3 (24 Languages, Voice Design, Speech Edit)",
+    "engine_drama_tab": "🎭 Fish Audio Drama 3 (35B MoE, Direction & Inline Tags, Hi-Fi 44.1kHz)",
     "tab_tts": "🎙️ TTS", "tab_expr": "🎭 Expressive + Director", "tab_clone": "🧬 Cloning",
     "tab_design": "🎨 Voice Design", "tab_edit": "✂️ Speech Edit",
     "tab_pod": "🎬 Podcast", "tab_book": "📚 Audiobook", "tab_batch": "📦 Batch",
@@ -290,6 +341,30 @@ _EN = {
     "batch_text": "List of texts (one per line)", "ph_batch": "First line.\nSecond line.\nThird line.",
     "log": "Log", "brand_header_html": BRAND_HTML_EN,
     "tab_long_clone": "🧬 Long Cloning",
+    "tab_batch_clone": "🧬 Batch Clone",
+    "bc_scenario_group": "📄 Script & Range Selection (output/NUM)",
+    "bc_upload_btn": "📂 Upload .txt",
+    "bc_reload_btn": "🔄 Reload",
+    "bc_load_btn": "🎧 Load",
+    "bc_text_label": "Selected fragment text (for voicing / editing)",
+    "bc_text_ph": "Click a fragment button or enter number and click 'Load'...",
+    "bc_stats_hint": "💡 Click **«Reload»** to check the script file range.",
+    "bc_file_path": "Script file (.txt)",
+    "bc_lang": "Script text language",
+    "bc_from": "From number",
+    "bc_to": "To number",
+    "bc_to_end": "To end of file",
+    "bc_skip_existing": "Skip existing files in NUM folder",
+    "bc_btn": "🔊 Start Batch Clone",
+    "bc_scan_btn": "🔍 Scan NUM folder",
+    "bc_merge_gap": "Pause between fragments (sec)",
+    "bc_merge_btn": "🔗 Merge fragments into one file (e.g. 01-33.wav)",
+    "bc_log_label": "Batch clone log",
+    "bc_merge_group": "🔗 Merge fragments in NUM folder",
+    "bc_decades_group": "🧭 Navigation by Decades & Fragment Selection",
+    "bc_decade_radio_label": "📅 Choose range (decade)",
+    "bc_decade_list_label": "Phrases of selected decade (click to inspect / load)",
+    "bc_files_accordion": "📂 All files in NUM folder (list)",
     "max_chars_label": "Max fragment length (chars)",
     "max_chars_info": "Optimal: 150-250. Lower yields choppy phrasing, higher increases degradation/repetition risks.",
     "gap_label": "Pause between fragments (sec)",
@@ -305,6 +380,7 @@ _EN = {
     "processed_text_label": "📝 Text after LLM (director)",
     "cpu_only_label": "💻 Use CPU only (no GPU)",
     "keep_vram_label": "⚡ Keep models in VRAM (speeds up subsequent runs)",
+    "save_seed_label": "Save Seed",
     "lc_custom_num": "Custom number",
     "lc_num_input": "File number",
     "design_hint": "Describe a voice in natural language (age, timbre, accent, pace) and synthesize from scratch (FireRedTTS3).",
@@ -371,12 +447,49 @@ HEAD_SCRIPT = """
     "Клонирование": "Cloning",
     "Создание голоса": "Voice Design",
     "Редактирование речи": "Speech Edit",
+    "Higgs Audio Studio & FireRedTTS3": "Audio Studio TTS",
+    "Audio Studio  TTS": "Audio Studio TTS",
+    "Audio Studio TTS": "Audio Studio TTS",
     "Длинный клон": "Long Cloning",
+    "Пакетный клон": "Batch Clone",
+    "Сценарий и выбор диапазона (output/NUM)": "Script & Range Selection (output/NUM)",
+    "Файл сценария (.txt)": "Script file (.txt)",
+    "Загрузить .txt": "Upload .txt",
+    "Перечитать": "Reload",
+    "Язык реплик из файла": "Script language",
+    "С номера": "From #",
+    "По номер": "To #",
+    "До конца файла": "To end of file",
+    "Загрузить": "Load",
+    "Текст выбранного фрагмента (для озвучки / правки)": "Selected fragment text (for voicing / editing)",
+    "Кликните на кнопку фрагмента или укажите номер и нажмите «Загрузить»...": "Click a fragment button or enter number and click 'Load'...",
+    "Кликните на файл в списке справа или укажите номер и нажмите «Загрузить»...": "Click a fragment button or enter number and click 'Load'...",
+    "Пропускать уже существующие файлы в папке NUM": "Skip existing files in NUM folder",
+    "Нажмите «Перечитать» для проверки диапазона файла сценария.": "Click 'Reload' to check script range.",
+    "Нажмите **«Перечитать»** для проверки диапазона файла сценария.": "Click **'Reload'** to check script range.",
+    "Запустить пакетную озвучку": "Start Batch Clone",
+    "Склеивание фрагментов в папке NUM": "Merge fragments in NUM folder",
+    "Сканировать папку NUM": "Scan NUM folder",
+    "Пауза между кусками (сек)": "Pause between fragments (sec)",
+    "Склеить фрагменты в один файл (напр. 01-33.wav)": "Merge fragments into one file (e.g. 01-33.wav)",
+    "Лог пакетной обработки": "Batch processing log",
+    "Навигация по десяткам и выбор фрагмента": "Navigation by Decades & Fragment Selection",
+    "Навигация по фрагментам (десятки и быстрый выбор)": "Fragment Navigation (decades & quick buttons)",
+    "Навигация по фрагментам": "Fragment Navigation",
+    "Выберите диапазон (десяток)": "Choose range (decade)",
+    "Выберите десяток": "Choose decade",
+    "Реплики выбранного десятка (клик для проверки / загрузки)": "Phrases of selected decade (click to inspect / load)",
+    "Реплики выбранного десятка (клик для проверки / перегенерации)": "Phrases of selected decade (click to inspect / re-generate)",
+    "Все файлы в папке NUM (список)": "All files in NUM folder (list)",
+    "Фрагменты в NUM (кликните для проверки / перегенерации)": "Fragments in NUM (click to inspect / re-generate)",
+    "[готов]": "[ready]",
+    "[нет]": "[missing]",
     "Подкаст": "Podcast",
     "Аудиокнига": "Audiobook",
     "Пакет": "Batch",
     "Использовать только CPU (без видеокарты)": "Use CPU only (no GPU)",
     "Не выгружать модели из памяти (ускоряет повторные запуски)": "Keep models in VRAM (speeds up subsequent runs)",
+    "Запись Seed": "Save Seed",
     "Формат вывода": "Output format",
     "Квантизация / Точность": "Quantization / Precision",
     "bf16 — высокое качество (рекомендуется)": "bf16 — high quality (recommended)",
@@ -773,6 +886,58 @@ CSS = """
 .fmt-radio-row label {
   margin-bottom: 0 !important;
 }
+.decade-radio .wrap,
+.decade-radio div[role="radiogroup"],
+.decade-radio .gradio-radio-group {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+.decade-radio label {
+  border-radius: 8px !important;
+  padding: 4px 10px !important;
+  font-weight: 600 !important;
+  font-size: 0.9em !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+.decade-slot-btn {
+  font-weight: 700 !important;
+  font-size: 0.95em !important;
+  border-radius: 8px !important;
+  text-align: center !important;
+}
+#lc-num-input .progress-text,
+#lc-num-input .status-tracker,
+#lc-num-input [class*="status-tracker"],
+#lc-num-input [class*="progress"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+.audio-filename-badge {
+  text-align: right !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  margin-top: -6px !important;
+  margin-bottom: 6px !important;
+  min-height: 24px !important;
+}
+.audio-filename-badge .fname-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.92em !important;
+  font-weight: 700 !important;
+  color: #c4b5fd !important;
+  background: rgba(124, 58, 237, 0.22) !important;
+  border: 1px solid rgba(167, 139, 250, 0.45) !important;
+  padding: 3px 12px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
 """
 
 DARK_JS = """
@@ -828,6 +993,14 @@ _FMT = {"wav": ("WAV", None), "mp3": ("MP3", None), "flac": ("FLAC", None), "ogg
 def set_out_format(f):
     global _OUT_FORMAT
     _OUT_FORMAT = f if f in _FMT else "wav"
+
+
+_SAVE_SEED = True
+
+
+def set_save_seed(val):
+    global _SAVE_SEED
+    _SAVE_SEED = bool(val)
 
 
 def _save(sr, wav, prefix="tts"):
@@ -958,9 +1131,12 @@ def _chunk(text, max_chars=120):
 
 
 def _speak(text, ref_audio=None, ref_text=None, engine_choice=None, language="auto", **kw):
-    """Маршрутизация синтеза на активный движок (Higgs v3.1 или FireRedTTS3)."""
+    """Маршрутизация синтеза на активный движок (Higgs v3.1, FireRedTTS3 или Drama 3)."""
+    is_drama = bool(engine_choice and "Drama" in engine_choice)
     is_firered = bool(engine_choice and "FireRed" in engine_choice)
-    if is_firered:
+    if is_drama:
+        return de.synth(text, ref_audio=ref_audio, ref_text=ref_text, **kw)
+    elif is_firered:
         import re
         clean_text = re.sub(r"<\|[^>]+:.*?\|>", "", text).strip()
         return fe.generate(clean_text, ref_audio=ref_audio, ref_text=ref_text, language=language, **kw)
@@ -1100,6 +1276,22 @@ def save_long_clone_settings(text, preset, max_chars, gap, merge, temp, top_p, s
     update_gui_config("language_choice", lang)
 
 
+def save_batch_clone_settings(file_path, lang, num_from, num_to, to_end, skip_existing, preset, temp, top_p, seed, auto, engine, tts_lang):
+    update_gui_config("bc_file_path", file_path)
+    update_gui_config("bc_lang", lang)
+    update_gui_config("bc_num_from", num_from)
+    update_gui_config("bc_num_to", num_to)
+    update_gui_config("bc_to_end", to_end)
+    update_gui_config("bc_skip_existing", skip_existing)
+    update_gui_config("lc_preset", preset)
+    update_gui_config("lc_temp", temp)
+    update_gui_config("lc_top_p", top_p)
+    update_gui_config("lc_seed", seed)
+    update_gui_config("lc_auto", auto)
+    update_gui_config("engine_choice", engine)
+    update_gui_config("language_choice", tts_lang)
+
+
 def save_book_settings(text):
     update_gui_config("b_text", text)
 
@@ -1139,6 +1331,7 @@ def _maybe_enrich(text, model, auto):
 def cb_tts(text, model, auto, temperature, top_p, top_k, max_new, seed, engine, lang, preset=None, progress=gr.Progress(track_tqdm=True)):
     eng.clear_cancel()
     fe.clear_cancel()
+    de.reset_cancel()
     text = _maybe_enrich(text, model, auto)
     ref_a, ref_t = None, None
     if preset and preset not in ("(По умолчанию / Default)", "(Свой файл / Own file)", OWN_FILE):
@@ -1157,6 +1350,7 @@ def cb_enrich(text, model):
 def cb_expr(text, model, auto, engine, lang, progress=gr.Progress(track_tqdm=True)):
     eng.clear_cancel()
     fe.clear_cancel()
+    de.reset_cancel()
     text = _maybe_enrich(text, model, auto)
     sr, wav = _speak(text, engine_choice=engine, language=lang)
     p = _save(sr, wav, "expr")
@@ -1166,6 +1360,7 @@ def cb_expr(text, model, auto, engine, lang, progress=gr.Progress(track_tqdm=Tru
 def cb_clone(text, model, auto, ref_audio, ref_text, preset, temperature, top_p, seed, engine, lang, progress=gr.Progress(track_tqdm=True)):
     eng.clear_cancel()
     fe.clear_cancel()
+    de.reset_cancel()
     text = _maybe_enrich(text, model, auto)
     ref = ref_audio or (voice_path(preset) if preset and preset != OWN_FILE else None)
     sr, wav = _speak(text, ref_audio=ref, ref_text=ref_text, temperature=temperature,
@@ -1281,9 +1476,11 @@ def cb_test_llm_connection(api_url, api_key, api_model):
 
 
 def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, top_p, seed, max_chars, gap, merge,
-                  api_url, api_key, api_model, system_prompt, custom_num, num_input, engine, lang, progress=gr.Progress(track_tqdm=True)):
+                  api_url, api_key, api_model, system_prompt, custom_num, num_input, engine, lang, save_seed=None,
+                  progress=gr.Progress(track_tqdm=True)):
     eng.clear_cancel()
     fe.clear_cancel()
+    de.reset_cancel()
     import soundfile as sf
     import numpy as np
 
@@ -1305,14 +1502,29 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
     except ValueError:
         next_num_str = num_str
 
+    def _fname_badge(path):
+        if not path:
+            return ""
+        name = Path(path).name
+        return f'<div class="fname-tag">🎵 {name}</div>'
+
     chunks = _chunk(text, max_chars=int(max_chars))
     if not chunks:
-        yield "Текст пуст / Text is empty", None, [], "", num_str
+        yield "Текст пуст / Text is empty", None, [], "", num_str, ""
         return
+
+    import random
+    if seed is None or int(seed) < 0:
+        actual_seed = random.randint(10000, 99999999)
+        seed_label = f"{actual_seed} (случайный)"
+    else:
+        actual_seed = int(seed)
+        seed_label = f"{actual_seed} (фиксированный)"
 
     device, name, vram = eng.detect_device()
     log_lines = [
         f"Движок: {engine} | Устройство: {name}",
+        f"🎲 Сид (Seed): {seed_label} | Температура: {temperature}",
         f"Разбито на {len(chunks)} частей. Папка: output/long_clone_{stamp}"
     ]
     if custom_num:
@@ -1325,22 +1537,24 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
             gr.Warning(warn_msg)
             log_lines.insert(0, warn_msg)
 
-    yield "\n".join(log_lines), None, [], "", num_str
+    yield "\n".join(log_lines), None, [], "", num_str, ""
 
     generated_files = []
     wav_chunks = []
     processed_chunks = []
     sr = 24000
 
+    total_chunks = max(len(chunks), 1)
     for i, chunk in enumerate(chunks):
-        if eng.cancelled() or fe.cancelled():
+        if eng.cancelled() or fe.cancelled() or de.cancelled():
             log_lines.append("\n⏹ Остановлено / Stopped.")
-            yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
+            yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str, ""
             return
 
-        progress((i + 1) / max(len(chunks), 1), desc=f"Фрагмент {i + 1}/{len(chunks)}")
-        log_lines.append(f"✓ Синтез части {i + 1}/{len(chunks)}: '{chunk[:40]}...'")
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
+        base_progress = i / total_chunks
+        progress(base_progress, desc=f"Фрагмент {i + 1}/{total_chunks} (подготовка...)")
+        log_lines.append(f"✓ Синтез части {i + 1}/{total_chunks}: '{chunk[:40]}...'")
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str, ""
 
         if auto:
             s_prompt = system_prompt + "\n" + dr._TAG_RULES
@@ -1363,6 +1577,17 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
 
         processed_chunks.append(chunk_to_speak)
 
+        expected_frames = max(len(chunk_to_speak) * 3.5, 60.0)
+
+        def on_synth_progress(step, max_f, chunk_idx=0, total_c=1, stage="generating"):
+            if stage == "decoding":
+                curr = (i + 0.95) / total_chunks
+                progress(curr, desc=f"Фрагмент {i + 1}/{total_chunks} (декодирование WAV...)")
+            else:
+                ratio = min(step / expected_frames, 0.90)
+                curr = (i + ratio) / total_chunks
+                progress(curr, desc=f"Фрагмент {i + 1}/{total_chunks} · кадр {step}")
+
         try:
             chunk_sr, chunk_wav = _speak(
                 chunk_to_speak,
@@ -1370,11 +1595,14 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
                 ref_text=ref_text,
                 temperature=temperature,
                 top_p=top_p,
-                seed=seed,
+                seed=actual_seed,
                 engine_choice=engine,
                 language=lang,
+                on_progress=on_synth_progress,
             )
             sr = chunk_sr
+
+            progress((i + 1) / total_chunks, desc=f"Фрагмент {i + 1}/{total_chunks}: готов")
 
             if chunk_wav is not None and len(chunk_wav) > 0:
                 filename = out_dir / f"chunk_{i + 1:03d}.wav"
@@ -1387,14 +1615,14 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
         except Exception as e:
             log_lines.append(f"  -> Ошибка генерации: {e}")
 
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str, ""
 
     final_wav = None
     final_saved_path = None
 
-    if merge and wav_chunks and not (eng.cancelled() or fe.cancelled()):
+    if merge and wav_chunks and not (eng.cancelled() or fe.cancelled() or de.cancelled()):
         log_lines.append("\nСклеивание фрагментов...")
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str, ""
 
         silence_len = int(gap * sr)
         sil = np.zeros(silence_len, dtype=np.float32)
@@ -1418,15 +1646,15 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
         log_lines.append(f"Склеено и сохранено: {merged_filename.name}")
         final_wav = merged_wav
         final_saved_path = _save_path
-        yield "\n".join(log_lines), _save_path, generated_files, "\n\n".join(processed_chunks), num_str
-    elif wav_chunks and not (eng.cancelled() or fe.cancelled()):
+        yield "\n".join(log_lines), _save_path, generated_files, "\n\n".join(processed_chunks), num_str, _fname_badge(_save_path)
+    elif wav_chunks and not (eng.cancelled() or fe.cancelled() or de.cancelled()):
         final_wav = wav_chunks[0] if len(wav_chunks) == 1 else np.concatenate(wav_chunks)
         final_saved_path = generated_files[0] if generated_files else None
-        yield "\n".join(log_lines), final_saved_path, generated_files, "\n\n".join(processed_chunks), num_str
+        yield "\n".join(log_lines), final_saved_path, generated_files, "\n\n".join(processed_chunks), num_str, _fname_badge(final_saved_path)
     else:
-        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str
+        yield "\n".join(log_lines), None, generated_files, "\n\n".join(processed_chunks), num_str, ""
 
-    if custom_num and final_wav is not None and not (eng.cancelled() or fe.cancelled()):
+    if custom_num and final_wav is not None and not (eng.cancelled() or fe.cancelled() or de.cancelled()):
         num_dir = OUTPUT_DIR / "NUM"
         num_dir.mkdir(parents=True, exist_ok=True)
         fmt = _OUT_FORMAT
@@ -1448,9 +1676,636 @@ def cb_long_clone(text, model, auto, ref_audio, ref_text, preset, temperature, t
             generated_files.insert(0, custom_saved_path)
             final_saved_path = custom_saved_path
 
+            # Сохранение текстового файла с сидом и параметрами рядом с аудиофайлом
+            should_save_seed = _SAVE_SEED if save_seed is None else bool(save_seed)
+            if should_save_seed:
+                meta_filepath = num_dir / f"{num_str}.txt"
+                try:
+                    with open(meta_filepath, "w", encoding="utf-8") as f_meta:
+                        f_meta.write(
+                            f"file: {custom_filepath.name}\n"
+                            f"seed: {actual_seed}\n"
+                            f"temperature: {temperature}\n"
+                            f"top_p: {top_p}\n"
+                            f"engine: {engine}\n"
+                            f"preset: {preset}\n"
+                            f"text: {text.strip()}\n"
+                        )
+                    log_lines.append(f"📄 Сид зафиксирован в: {meta_filepath.name} (Seed: {actual_seed})")
+                except Exception as e_meta:
+                    print(f"[save] meta error: {e_meta}")
+
     log_lines.append("\n🎉 Готово / Done!")
-    final_num_str = next_num_str if (custom_num and not (eng.cancelled() or fe.cancelled()) and wav_chunks) else num_str
-    yield "\n".join(log_lines), final_saved_path, generated_files, "\n\n".join(processed_chunks), final_num_str
+    final_num_str = next_num_str if (custom_num and not (eng.cancelled() or fe.cancelled() or de.cancelled()) and wav_chunks) else num_str
+    progress(1.0, desc="Готово / Done")
+    yield "\n".join(log_lines), final_saved_path, generated_files, "\n\n".join(processed_chunks), final_num_str, _fname_badge(final_saved_path)
+
+
+def parse_batch_script(content_or_path, lang="EN"):
+    """
+    Разбор файла сценария для пакетного клонирования (напр. output/NUM/ru-en.txt).
+    Поддерживает блоки [01.wav] или [01], с тегами RU: / EN: или простым текстом.
+    """
+    if not content_or_path:
+        return []
+    path = Path(content_or_path)
+    if path.is_file():
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            return []
+    elif isinstance(content_or_path, str) and ("\n" in content_or_path or "[" in content_or_path):
+        content = content_or_path
+    else:
+        alt1 = OUTPUT_DIR / content_or_path
+        alt2 = Path.cwd() / content_or_path
+        if alt1.is_file():
+            content = alt1.read_text(encoding="utf-8", errors="replace")
+        elif alt2.is_file():
+            content = alt2.read_text(encoding="utf-8", errors="replace")
+        else:
+            return []
+
+    lines = content.splitlines()
+    items = []
+    curr_num_str = None
+    curr_ru = []
+    curr_en = []
+    curr_raw = []
+    curr_tag = None
+
+    def _flush():
+        nonlocal curr_num_str, curr_ru, curr_en, curr_raw, curr_tag
+        if curr_num_str is not None:
+            try:
+                val = int(curr_num_str)
+            except ValueError:
+                val = 0
+            ru_text = " ".join(curr_ru).strip()
+            en_text = " ".join(curr_en).strip()
+            raw_text = " ".join(curr_raw).strip()
+
+            target_lang = (lang or "EN").upper()
+            if target_lang == "EN":
+                chosen = en_text or raw_text or ru_text
+            elif target_lang == "RU":
+                chosen = ru_text or raw_text or en_text
+            else:
+                chosen = raw_text or (f"{ru_text}\n{en_text}".strip())
+
+            items.append({
+                "num_str": curr_num_str,
+                "num": val,
+                "text": chosen,
+                "ru": ru_text,
+                "en": en_text,
+                "raw": raw_text,
+            })
+
+    for line in lines:
+        m = re.match(r'^\s*\[(\d+)(?:\.\w+)?\]\s*$', line)
+        if m:
+            _flush()
+            curr_num_str = m.group(1)
+            curr_ru = []
+            curr_en = []
+            curr_raw = []
+            curr_tag = None
+            continue
+
+        if curr_num_str is None:
+            continue
+
+        sline = line.strip()
+        if not sline:
+            curr_tag = None
+            continue
+
+        if sline.startswith("---") or re.match(r'^\d+\.\s+\S+', sline):
+            curr_tag = None
+            continue
+
+        if re.match(r'^RU\s*:\s*', sline, re.IGNORECASE):
+            curr_tag = "RU"
+            text_part = re.sub(r'^RU\s*:\s*', '', sline, flags=re.IGNORECASE).strip()
+            if text_part:
+                curr_ru.append(text_part)
+                curr_raw.append(text_part)
+        elif re.match(r'^EN\s*:\s*', sline, re.IGNORECASE):
+            curr_tag = "EN"
+            text_part = re.sub(r'^EN\s*:\s*', '', sline, flags=re.IGNORECASE).strip()
+            if text_part:
+                curr_en.append(text_part)
+                curr_raw.append(text_part)
+        elif curr_tag == "RU":
+            curr_ru.append(sline)
+            curr_raw.append(sline)
+        elif curr_tag == "EN":
+            curr_en.append(sline)
+            curr_raw.append(sline)
+        else:
+            curr_raw.append(sline)
+
+    _flush()
+    return items
+
+
+def cb_scan_num_folder():
+    """Сканирует папку output/NUM и находит минимальный и максимальный номера аудиофайлов."""
+    num_dir = OUTPUT_DIR / "NUM"
+    if not num_dir.exists():
+        num_dir.mkdir(parents=True, exist_ok=True)
+    pattern = re.compile(r'^(\d+)\.(wav|mp3|flac|ogg)$', re.IGNORECASE)
+    found = []
+    for p in num_dir.iterdir():
+        if p.is_file():
+            m = pattern.match(p.name)
+            if m:
+                found.append((int(m.group(1)), m.group(1), p))
+
+    if not found:
+        return "01", "01", "🔍 Сканирование: в папке output/NUM аудиофайлы не найдены."
+
+    found.sort(key=lambda x: x[0])
+    min_str = found[0][1]
+    max_str = found[-1][1]
+    count = len(found)
+    msg = f"🔍 Найдено {count} фрагментов в папке output/NUM: с {min_str} по {max_str}"
+    return min_str, max_str, msg
+
+
+def cb_merge_num_folder(num_from, num_to, pause_sec=0.5, progress=gr.Progress(track_tqdm=True)):
+    """
+    Склеивает аудиофрагменты в папке output/NUM с номерами от num_from по num_to с паузой.
+    Имя файла: {num_from}-{num_to}.wav (если существует, то _01, _02 и т.д.).
+    """
+    import soundfile as sf
+    import numpy as np
+    num_dir = OUTPUT_DIR / "NUM"
+    if not num_dir.exists():
+        return "❌ Папка output/NUM не существует.", None, [], ""
+
+    try:
+        from_val = int(str(num_from).strip())
+    except Exception:
+        from_val = 1
+    try:
+        to_val = int(str(num_to).strip())
+    except Exception:
+        to_val = from_val
+
+    if from_val > to_val:
+        from_val, to_val = to_val, from_val
+
+    pattern = re.compile(r'^(\d+)\.(wav|mp3|flac|ogg)$', re.IGNORECASE)
+    found = []
+    for p in num_dir.iterdir():
+        if p.is_file():
+            m = pattern.match(p.name)
+            if m:
+                v = int(m.group(1))
+                if from_val <= v <= to_val:
+                    found.append((v, m.group(1), p))
+
+    if not found:
+        return f"❌ В папке output/NUM не найдено аудиофайлов в диапазоне от {from_val} до {to_val}.", None, [], ""
+
+    found.sort(key=lambda x: x[0])
+
+    existing_nums = {item[0] for item in found}
+    missing_nums = [n for n in range(from_val, to_val + 1) if n not in existing_nums]
+    missing_info = ""
+    if missing_nums:
+        missing_info = f"\n⚠️ Отсутствуют номера в диапазоне: {', '.join(str(n) for n in missing_nums[:10])}{'...' if len(missing_nums) > 10 else ''}"
+
+    progress(0.1, desc=f"Чтение {len(found)} файлов...")
+    wav_list = []
+    target_sr = None
+    for idx, (v, num_str_orig, p) in enumerate(found):
+        progress(0.1 + 0.6 * (idx / len(found)), desc=f"Чтение: {p.name} ({idx+1}/{len(found)})")
+        try:
+            data, cur_sr = sf.read(str(p), dtype="float32")
+            if target_sr is None:
+                target_sr = cur_sr
+            elif cur_sr != target_sr:
+                import scipy.signal
+                new_len = int(round(len(data) * float(target_sr) / cur_sr))
+                data = scipy.signal.resample(data, new_len).astype(np.float32)
+            if data.ndim > 1:
+                data = np.mean(data, axis=1)
+            wav_list.append(data)
+        except Exception as e:
+            return f"❌ Ошибка чтения файла {p.name}: {e}", None, [], ""
+
+    if not wav_list:
+        return "❌ Не удалось прочитать аудиофайлы.", None, [], ""
+
+    progress(0.8, desc="Склеивание аудио...")
+    try:
+        pause_val = float(pause_sec)
+    except Exception:
+        pause_val = 0.5
+    pause_val = max(0.0, min(pause_val, 10.0))
+
+    silence_len = int(pause_val * target_sr)
+    pieces = []
+    for idx, w in enumerate(wav_list):
+        if idx > 0 and silence_len > 0:
+            pieces.append(np.zeros(silence_len, dtype=np.float32))
+        pieces.append(w)
+
+    merged_wav = np.concatenate(pieces)
+    merged_wav = eng._peak_limit(merged_wav)
+
+    start_str = str(num_from).strip()
+    end_str = str(num_to).strip()
+    base_name = f"{start_str}-{end_str}"
+    fmt = _OUT_FORMAT or "wav"
+    container, subtype = _FMT.get(fmt, ("WAV", None))
+
+    target_file = num_dir / f"{base_name}.{fmt}"
+    if target_file.exists():
+        idx_copy = 1
+        while True:
+            cand = num_dir / f"{base_name}_{idx_copy:02d}.{fmt}"
+            if not cand.exists():
+                target_file = cand
+                break
+            idx_copy += 1
+
+    try:
+        sf.write(str(target_file), merged_wav, target_sr, format=container, subtype=subtype)
+    except Exception:
+        target_file = num_dir / f"{target_file.stem}.wav"
+        sf.write(str(target_file), merged_wav, target_sr)
+
+    dur = len(merged_wav) / target_sr
+    progress(1.0, desc="Готово!")
+
+    def _badge(path):
+        if not path:
+            return ""
+        return f'<div class="fname-tag">🎵 {Path(path).name}</div>'
+
+    log_msg = (
+        f"🎉 Успешно склеено {len(wav_list)} файлов в {target_file.name}!\n"
+        f"  Диапазон: {start_str} - {end_str}\n"
+        f"  Пауза между частями: {pause_val} сек\n"
+        f"  Итоговая длительность: {dur:.1f} сек\n"
+        f"  Путь: {target_file}{missing_info}"
+    )
+    return log_msg, str(target_file), [str(target_file)], _badge(str(target_file))
+
+
+def get_num_fragment_choices():
+    num_dir = OUTPUT_DIR / "NUM"
+    choices = []
+    if num_dir.exists():
+        pattern = re.compile(r'^(\d+)\.(wav|mp3|flac|ogg)$', re.IGNORECASE)
+        found = []
+        for p in num_dir.iterdir():
+            if p.is_file():
+                m = pattern.match(p.name)
+                if m:
+                    found.append((int(m.group(1)), p.name))
+        found.sort(key=lambda x: x[0], reverse=True)
+        choices = [f[1] for f in found]
+    return choices
+
+
+def get_num_files_list():
+    num_dir = OUTPUT_DIR / "NUM"
+    existing_files = []
+    if num_dir.exists():
+        pattern = re.compile(r'^(\d+)\.(wav|mp3|flac|ogg)$', re.IGNORECASE)
+        for p in num_dir.iterdir():
+            if p.is_file() and pattern.match(p.name):
+                existing_files.append((int(pattern.match(p.name).group(1)), str(p)))
+        existing_files.sort(key=lambda x: x[0], reverse=True)
+    return [f[1] for f in existing_files]
+
+
+def get_script_decades(file_path="output/NUM/ru-en.txt", lang="EN"):
+    items = parse_batch_script(file_path, lang=lang)
+    if not items:
+        return ["01-10"]
+    total = len(items)
+    decades = []
+    for start in range(1, total + 1, 10):
+        end = min(start + 9, total)
+        decades.append(f"{start:02d}-{end:02d}")
+    return decades
+
+
+def get_decade_data(decade_str, file_path="output/NUM/ru-en.txt", lang="EN"):
+    """
+    Возвращает данные для 10 кнопок и списка фрагментов выбранного десятка (напр. '21-30').
+    """
+    m = re.match(r'(\d+)-(\d+)', str(decade_str or ""))
+    if m:
+        start_val = int(m.group(1))
+        end_val = int(m.group(2))
+    else:
+        start_val = 1
+        end_val = 10
+
+    num_dir = OUTPUT_DIR / "NUM"
+    existing = set()
+    if num_dir.exists():
+        pattern = re.compile(r'^(\d+)\.(wav|mp3|flac|ogg)$', re.IGNORECASE)
+        for p in num_dir.iterdir():
+            if p.is_file() and pattern.match(p.name):
+                existing.add(int(pattern.match(p.name).group(1)))
+
+    items = parse_batch_script(file_path, lang=lang)
+    items_by_num = {it["num"]: it for it in items}
+
+    btn_updates = []
+    radio_choices = []
+
+    for idx, num in enumerate(range(start_val, start_val + 10)):
+        num_str = f"{num:02d}"
+        if num <= end_val and num in items_by_num:
+            it = items_by_num[num]
+            is_ready = num in existing
+            icon = "✅" if is_ready else "⚪"
+            label = f"{icon} {num_str}"
+            variant = "primary" if is_ready else "secondary"
+            btn_updates.append(gr.update(value=label, variant=variant, visible=True))
+
+            short_txt = (it["text"][:55] + "...") if len(it["text"]) > 55 else it["text"]
+            status_txt = "готов" if is_ready else "нет"
+            radio_choices.append(f"{num_str} [{status_txt}]: {short_txt}")
+        elif num <= end_val:
+            is_ready = num in existing
+            icon = "✅" if is_ready else "⚪"
+            label = f"{icon} {num_str}"
+            btn_updates.append(gr.update(value=label, variant="secondary", visible=True))
+            radio_choices.append(f"{num_str}")
+        else:
+            btn_updates.append(gr.update(value="", visible=False))
+
+    radio_update = gr.update(choices=radio_choices, value=None)
+    return btn_updates, radio_update
+
+
+def cb_inspect_fragment(evt_or_choice, file_path_script, lang_choice, cur_log=""):
+    """
+    При клике на файл в списке bc_files или выборе в dropdown bc_inspect_dd:
+    1. Определяет номер фрагмента (напр. '20')
+    2. Загружает аудио этого фрагмента (output/NUM/20.wav) в плеер
+    3. Подтягивает текст фрагмента (из output/NUM/20.txt или сценария) в поле bc_text
+    4. Присваивает 'С номера' = '20', 'По номер' = '20'
+    5. Снимает 'До конца файла' = False
+    6. Снимает 'Пропускать существующие' = False (чтобы можно было сразу перегенерировать)
+    7. Обновляет бейдж '🎵 20.wav'
+    """
+    val = ""
+    if hasattr(evt_or_choice, "value"):
+        v = evt_or_choice.value
+        if isinstance(v, dict):
+            val = v.get("orig_name") or v.get("name") or v.get("path") or ""
+        elif isinstance(v, str):
+            val = v
+    elif isinstance(evt_or_choice, str):
+        val = evt_or_choice
+
+    raw_val = val or str(evt_or_choice or "")
+    m = re.search(r'(\d+)', Path(raw_val).name if raw_val else "")
+    if not m:
+        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
+
+    num_str = m.group(1)
+    try:
+        num_val = int(num_str)
+    except ValueError:
+        num_val = 0
+
+    num_dir = OUTPUT_DIR / "NUM"
+
+    found_text = ""
+    meta_txt = num_dir / f"{num_str}.txt"
+    if meta_txt.exists():
+        try:
+            for l in meta_txt.read_text(encoding="utf-8", errors="replace").splitlines():
+                if l.startswith("text:"):
+                    found_text = l[5:].strip()
+                    break
+        except Exception:
+            pass
+
+    if not found_text:
+        items = parse_batch_script(file_path_script, lang=lang_choice)
+        for it in items:
+            if it["num"] == num_val:
+                found_text = it["text"]
+                break
+
+    audio_path = None
+    for ext in ["wav", "mp3", "flac", "ogg"]:
+        candidate = num_dir / f"{num_str}.{ext}"
+        if candidate.exists():
+            audio_path = str(candidate)
+            break
+
+    badge_html = f'<div class="fname-tag">🎵 {Path(audio_path).name}</div>' if audio_path else ""
+    log_entry = f"\n🔍 Проверка фрагмента {num_str}:\n  Текст: '{found_text[:80]}...'\n  Файл: {Path(audio_path).name if audio_path else 'не найден'}\n  Диапазон установлен: {num_str} - {num_str} (готов к прослушиванию / перегенерации)"
+    updated_log = ((cur_log or "") + "\n" + log_entry).strip()
+
+    dd_val = Path(audio_path).name if audio_path else f"{num_str}.wav"
+
+    return (
+        found_text,   # bc_text
+        num_str,      # bc_num_from
+        num_str,      # bc_num_to
+        False,        # bc_to_end
+        False,        # bc_skip_existing
+        audio_path,   # bc_out
+        badge_html,   # bc_filename
+        updated_log,  # bc_log
+        gr.update()   # bc_decade_list
+    )
+
+
+def cb_batch_clone(file_path, lang_choice, num_from, num_to, to_end, skip_existing,
+                   preset, ref_audio, ref_text, temperature, top_p, seed, auto,
+                   api_url, api_key, api_model, system_prompt,
+                   engine, lang, save_seed=None, custom_text="",
+                   progress=gr.Progress(track_tqdm=True)):
+    """
+    Пакетная озвучка фрагментов из сценария в отдельные файлы output/NUM/{num}.wav
+    """
+    eng.clear_cancel()
+    fe.clear_cancel()
+    de.reset_cancel()
+    import soundfile as sf
+    import numpy as np
+    import random
+
+    items = parse_batch_script(file_path, lang=lang_choice)
+    if not items:
+        yield f"❌ Не удалось прочитать сценарий или фрагменты не найдены в: {file_path}", None, [], "", gr.update()
+        return
+
+    try:
+        start_num = int(str(num_from).strip())
+    except Exception:
+        start_num = 1
+    try:
+        end_num = 999999 if to_end else int(str(num_to).strip())
+    except Exception:
+        end_num = 999999
+    if start_num > end_num:
+        start_num, end_num = end_num, start_num
+
+    target_items = [it for it in items if start_num <= it["num"] <= end_num]
+    if not target_items:
+        yield f"❌ В диапазоне {start_num} - {end_num} не найдено подходящих фрагментов в сценарии.", None, [], "", gr.update()
+        return
+
+    num_dir = OUTPUT_DIR / "NUM"
+    num_dir.mkdir(parents=True, exist_ok=True)
+    fmt = _OUT_FORMAT or "wav"
+    container, subtype = _FMT.get(fmt, ("WAV", None))
+
+    if seed is None or int(seed) < 0:
+        actual_seed = random.randint(10000, 99999999)
+        seed_label = f"{actual_seed} (случайный)"
+    else:
+        actual_seed = int(seed)
+        seed_label = f"{actual_seed} (фиксированный)"
+
+    ref = ref_audio or (voice_path(preset) if preset and preset != OWN_FILE else None)
+
+    total_items = len(target_items)
+    log_lines = [
+        f"🚀 Запуск пакетной озвучки (Пакетный клон)",
+        f"Файл сценария: {file_path} (выбрано: {total_items} фрагментов с {start_num} по {end_num if not to_end else 'конец'})",
+        f"Язык текста: {lang_choice} | Пропуск существующих: {'Да' if skip_existing else 'Нет'}",
+        f"Движок: {engine} | Голос: {preset or 'Свой файл'} | Сид: {seed_label}",
+        f"Папка сохранения: output/NUM",
+        "-" * 50
+    ]
+    generated_files = get_num_files_list()
+    last_saved_path = None
+    yield "\n".join(log_lines), gr.update(), generated_files, "", gr.update(choices=get_num_fragment_choices())
+
+    processed_count = 0
+
+    def _fname_badge(path):
+        if not path:
+            return ""
+        return f'<div class="fname-tag">🎵 {Path(path).name}</div>'
+
+    for i, item in enumerate(target_items):
+        if eng.cancelled() or fe.cancelled() or de.cancelled():
+            log_lines.append("\n⏹ Остановлено / Stopped.")
+            yield "\n".join(log_lines), last_saved_path or gr.update(), generated_files, _fname_badge(last_saved_path)
+            return
+
+        num_str = item["num_str"]
+        target_path = num_dir / f"{num_str}.{fmt}"
+
+        if skip_existing and target_path.exists():
+            log_lines.append(f"⏭ [{i+1}/{total_items}] Файл {target_path.name} уже существует -> пропуск.")
+            if str(target_path) not in generated_files:
+                generated_files.insert(0, str(target_path))
+            yield "\n".join(log_lines), gr.update(), generated_files, gr.update()
+            continue
+
+        if len(target_items) == 1 and custom_text and custom_text.strip():
+            text_to_speak = custom_text.strip()
+        else:
+            text_to_speak = item["text"]
+
+        if not text_to_speak or not text_to_speak.strip():
+            log_lines.append(f"⚠️ [{i+1}/{total_items}] Фрагмент {num_str}: текст пуст, пропуск.")
+            yield "\n".join(log_lines), gr.update(), generated_files, gr.update(), gr.update(choices=get_num_fragment_choices())
+            continue
+
+        base_prog = i / total_items
+        progress(base_prog, desc=f"Файл {num_str} ({i+1}/{total_items}) · подготовка...")
+        log_lines.append(f"▶ [{i+1}/{total_items}] Синтез {target_path.name}: '{text_to_speak[:60]}...'")
+        yield "\n".join(log_lines), gr.update(), generated_files, gr.update(), gr.update(choices=get_num_fragment_choices())
+
+        chunk_to_speak = text_to_speak
+        if auto:
+            s_prompt = (system_prompt or "") + "\n" + dr._TAG_RULES
+            try:
+                if api_url and "External API" in str(api_model or ""):
+                    enriched = dr.filter_tags(dr._chat(s_prompt, chunk_to_speak, label="External API (LM Studio / Ollama / OpenAI)", temp=0.4, api_url=api_url, api_key=api_key, api_model=api_model))
+                else:
+                    enriched = dr.filter_tags(dr._chat(s_prompt, chunk_to_speak, label=dr.DEFAULT_MODEL, temp=0.4))
+                if enriched and enriched.strip():
+                    chunk_to_speak = enriched.strip()
+            except Exception as e_llm:
+                log_lines.append(f"  -> Предупреждение LLM: {e_llm}")
+
+        expected_frames = max(len(chunk_to_speak) * 3.5, 60.0)
+
+        def on_synth_progress(step, max_f, chunk_idx=0, total_c=1, stage="generating"):
+            if stage == "decoding":
+                curr = (i + 0.95) / total_items
+                progress(curr, desc=f"Файл {num_str} ({i+1}/{total_items}) · декодирование WAV...")
+            else:
+                ratio = min(step / expected_frames, 0.90)
+                curr = (i + ratio) / total_items
+                progress(curr, desc=f"Файл {num_str} ({i+1}/{total_items}) · кадр {step}")
+
+        try:
+            sr, chunk_wav = _speak(
+                chunk_to_speak,
+                ref_audio=ref,
+                ref_text=ref_text,
+                temperature=temperature,
+                top_p=top_p,
+                seed=actual_seed,
+                engine_choice=engine,
+                language=lang,
+                on_progress=on_synth_progress,
+            )
+
+            if chunk_wav is not None and len(chunk_wav) > 0:
+                try:
+                    sf.write(str(target_path), chunk_wav, sr, format=container, subtype=subtype)
+                except Exception:
+                    target_path = num_dir / f"{num_str}.wav"
+                    sf.write(str(target_path), chunk_wav, sr)
+
+                last_saved_path = str(target_path)
+                if last_saved_path in generated_files:
+                    generated_files.remove(last_saved_path)
+                generated_files.insert(0, last_saved_path)
+                processed_count += 1
+                log_lines.append(f"  ✓ Сохранен: {target_path.name}")
+
+                should_save_seed = _SAVE_SEED if save_seed is None else bool(save_seed)
+                if should_save_seed:
+                    meta_filepath = num_dir / f"{num_str}.txt"
+                    try:
+                        with open(meta_filepath, "w", encoding="utf-8") as f_m:
+                            f_m.write(
+                                f"file: {target_path.name}\n"
+                                f"seed: {actual_seed}\n"
+                                f"temperature: {temperature}\n"
+                                f"top_p: {top_p}\n"
+                                f"engine: {engine}\n"
+                                f"preset: {preset}\n"
+                                f"text: {chunk_to_speak.strip()}\n"
+                            )
+                        log_lines.append(f"  📄 Сид зафиксирован: {meta_filepath.name} (Seed: {actual_seed})")
+                    except Exception as e_m:
+                        print(f"[batch save] meta error: {e_m}")
+            else:
+                log_lines.append(f"  ❌ Ошибка: пустой аудиопоток для {num_str}")
+        except Exception as e_gen:
+            log_lines.append(f"  ❌ Ошибка генерации {num_str}: {e_gen}")
+
+        yield "\n".join(log_lines), last_saved_path, generated_files, _fname_badge(last_saved_path)
+
+    log_lines.append(f"\n🎉 Пакетная озвучка завершена! Успешно создано: {processed_count} файлов.")
+    progress(1.0, desc="Готово / Done")
+    yield "\n".join(log_lines), last_saved_path or gr.update(), generated_files, _fname_badge(last_saved_path)
 
 
 def cb_podcast_script(topic, num, model):
@@ -1464,35 +2319,39 @@ def cb_book_markup(text, num, model):
 def cb_multi_synth(script, a0, a1, a2, a3, t0, t1, t2, t3, engine, lang, progress=gr.Progress()):
     eng.clear_cancel()
     fe.clear_cancel()
+    de.reset_cancel()
     audios = [a0, a1, a2, a3]
     texts = [t0, t1, t2, t3]
     turns = [(sid, txt) for sid, txt in parse_script(script) if txt.strip()]
     if not turns:
         return None
     chunks = []
+    last_sr = eng.SR
     for i, (sid, txt) in enumerate(turns):
-        if eng.cancelled() or fe.cancelled():
+        if eng.cancelled() or fe.cancelled() or de.cancelled():
             break
         progress((i + 1) / len(turns), desc=f"{i + 1}/{len(turns)} · Speaker {sid}")
         ref = audios[sid] if 0 <= sid < MAX_SPK else None
         rt = (texts[sid] if 0 <= sid < MAX_SPK else None) or None
-        _, wav = _speak(txt, ref_audio=ref, ref_text=rt, engine_choice=engine, language=lang)
+        sr, wav = _speak(txt, ref_audio=ref, ref_text=rt, engine_choice=engine, language=lang)
         if wav is not None and len(wav):
             chunks.append(wav)
+            last_sr = sr
     final = eng._concat(chunks, gap=0.3)
-    p = _save(eng.SR, final, "multi")
+    p = _save(last_sr, final, "multi")
     return p
 
 
 def cb_batch(texts, model, auto, engine, lang, progress=gr.Progress()):
     eng.clear_cancel()
     fe.clear_cancel()
+    de.reset_cancel()
     lines = [t.strip() for t in (texts or "").splitlines() if t.strip()]
     device, name, vram = eng.detect_device()
     log = [f"Движок: {engine} | Устройство: {name}", f"Начало пакетной обработки ({len(lines)} строк)"]
     paths = []
     for i, line in enumerate(lines):
-        if eng.cancelled() or fe.cancelled():
+        if eng.cancelled() or fe.cancelled() or de.cancelled():
             yield "\n".join(log) + "\n\n⏹ Остановлено / Stopped.", paths
             return
         progress((i + 1) / max(len(lines), 1), desc=f"{i + 1}/{len(lines)}")
@@ -1590,7 +2449,6 @@ def cb_load_example(lang="auto"):
 
 def _build_tts_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, prefix="t"):
     gui_cfg = gui_cfg or {}
-    is_higgs = "Higgs" in engine_name
     DEFAULT_PRESET = "(По умолчанию / Default)"
     with gr.Row():
         with gr.Column():
@@ -1601,30 +2459,30 @@ def _build_tts_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, pre
             with gr.Row():
                 t_preset = gr.Dropdown([DEFAULT_PRESET] + scan_voices(), value=gui_cfg.get(f"{prefix}_preset", DEFAULT_PRESET), label=T("voice_preset"), scale=2)
                 t_refresh = gr.Button(T("refresh"), size="sm", scale=0)
-            with gr.Accordion(T("advanced"), open=False):
+            with gr.Accordion(T("advanced"), open=True):
                 t_temp = gr.Slider(0.0, 1.5, gui_cfg.get("t_temp", 1.0), step=0.05, label="Temperature")
                 t_top_p = gr.Slider(0.1, 1.0, gui_cfg.get("t_top_p", 0.95), step=0.01, label="Top-p")
                 t_top_k = gr.Slider(0, 1026, gui_cfg.get("t_top_k", 50), step=1, label="Top-k (0=off)")
                 t_max = gr.Slider(64, 4096, gui_cfg.get("t_max", 2048), step=64, label=T("max_tokens"))
                 t_seed = gr.Number(gui_cfg.get("t_seed", -1), label=T("seed"), precision=0)
-            t_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("t_auto", False), visible=is_higgs)
+            t_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("t_auto", False), visible=True)
             t_btn = gr.Button(T("generate"), variant="primary", size="lg")
             t_stop = gr.Button(T("stop"), variant="stop")
         t_out = gr.Audio(label=T("result"), type="filepath", autoplay=True)
     gr.Examples(TTS_EXAMPLES, inputs=[t_text], label=T("examples"))
     t_upload.upload(load_text_file, [t_upload], [t_text])
     t_refresh.click(lambda: gr.update(choices=[DEFAULT_PRESET] + scan_voices()), None, [t_preset])
-    eng_state = gr.State(engine_name)
+    eng_input = engine_name if isinstance(engine_name, gr.components.Component) else gr.State(engine_name)
     m_input = model_dd if model_dd is not None else gr.State(dr.DEFAULT_MODEL)
     l_input = lang_dd if lang_dd is not None else gr.State("auto")
     t_example_btn.click(cb_load_example, [l_input], [t_text])
-    t_btn.click(save_tts_settings, [t_text, t_temp, t_top_p, t_top_k, t_max, t_seed, eng_state, l_input, t_preset], None)
-    ev_tts = t_btn.click(cb_tts, [t_text, m_input, t_auto, t_temp, t_top_p, t_top_k, t_max, t_seed, eng_state, l_input, t_preset],
+    t_btn.click(save_tts_settings, [t_text, t_temp, t_top_p, t_top_k, t_max, t_seed, eng_input, l_input, t_preset], None)
+    ev_tts = t_btn.click(cb_tts, [t_text, m_input, t_auto, t_temp, t_top_p, t_top_k, t_max, t_seed, eng_input, l_input, t_preset],
                          [t_out, t_text])
-    t_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_tts])
+    t_stop.click(lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()), None, None, queue=False, cancels=[ev_tts])
 
 
-def _build_expr_panel(model_dd=None, gui_cfg=None):
+def _build_expr_panel(model_dd=None, engine_dd=None, lang_dd=None, gui_cfg=None):
     gui_cfg = gui_cfg or {}
     e_text = gr.Textbox(label=T("text"), placeholder=T("ph_text"), lines=5, value=gui_cfg.get("e_text", ""))
     with gr.Row():
@@ -1648,19 +2506,18 @@ def _build_expr_panel(model_dd=None, gui_cfg=None):
         gr.Markdown(TAGS_LEGEND_MD)
     e_upload.upload(load_text_file, [e_upload], [e_text])
     e_example_btn.click(lambda: "<|emotion:elation|>Привет! <|prosody:cheerful|>Это пример эмоционального текста со звуковыми эффектами! <|sfx:laughter|>ха-ха!", None, [e_text])
-    eng_state = gr.State(ENGINE_HIGGS)
-    lang_state = gr.State("auto")
+    eng_input = engine_dd if isinstance(engine_dd, gr.components.Component) else gr.State(ENGINE_HIGGS)
+    lang_input = lang_dd if isinstance(lang_dd, gr.components.Component) else gr.State("auto")
     m_input = model_dd if model_dd is not None else gr.State(dr.DEFAULT_MODEL)
     e_enrich.click(save_expr_settings, [e_text, e_auto], None)
     e_enrich.click(cb_enrich, [e_text, m_input], [e_text])
     e_btn.click(save_expr_settings, [e_text, e_auto], None)
-    ev_expr = e_btn.click(cb_expr, [e_text, m_input, e_auto, eng_state, lang_state], [e_out, e_text])
-    e_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_expr])
+    ev_expr = e_btn.click(cb_expr, [e_text, m_input, e_auto, eng_input, lang_input], [e_out, e_text])
+    e_stop.click(lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()), None, None, queue=False, cancels=[ev_expr])
 
 
 def _build_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, prefix="c"):
     gui_cfg = gui_cfg or {}
-    is_higgs = "Higgs" in engine_name
     with gr.Row():
         with gr.Column():
             c_text = gr.Textbox(label=T("text"), placeholder=T("ph_clone"), lines=3, value=gui_cfg.get(f"{prefix}_text", gui_cfg.get("c_text", "")))
@@ -1672,10 +2529,10 @@ def _build_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, p
             c_ref = gr.Audio(label=T("ref_voice"), type="filepath", sources=["upload", "microphone"])
             c_ref_text = gr.Textbox(label=T("ref_text"), lines=2, placeholder=T("ph_clone_tr"))
             c_tr_btn = gr.Button(T("transcribe_btn"), size="sm")
-            c_temp = gr.Slider(0.0, 1.5, gui_cfg.get("c_temp", 1.0), step=0.05, label="Temperature")
+            c_temp = gr.Slider(0.0, 1.5, gui_cfg.get("c_temp", 0.8), step=0.05, label="Temperature")
             c_top_p = gr.Slider(0.1, 1.0, gui_cfg.get("c_top_p", 0.95), step=0.01, label="Top-p")
             c_seed = gr.Number(gui_cfg.get("c_seed", -1), label=T("seed"), precision=0)
-            c_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("c_auto", False), visible=is_higgs)
+            c_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("c_auto", False), visible=True)
             c_btn = gr.Button(T("generate"), variant="primary", size="lg")
             c_stop = gr.Button(T("stop"), variant="stop")
         c_out = gr.Audio(label=T("result"), type="filepath", autoplay=True)
@@ -1693,14 +2550,14 @@ def _build_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, p
     cl_all.click(cb_download_all_cloud, None, [cl_status, c_preset])
     cl_dl.click(cb_download_voices, [cl_voices], [cl_status, c_preset])
     c_upload.upload(load_text_file, [c_upload], [c_text])
-    eng_state = gr.State(engine_name)
+    eng_input = engine_name if isinstance(engine_name, gr.components.Component) else gr.State(engine_name)
     m_input = model_dd if model_dd is not None else gr.State(dr.DEFAULT_MODEL)
     l_input = lang_dd if lang_dd is not None else gr.State("auto")
     c_example_btn.click(cb_load_example, [l_input], [c_text])
-    c_btn.click(save_clone_settings, [c_text, c_preset, c_auto, c_temp, c_top_p, c_seed, eng_state, l_input], None)
-    ev_clone = c_btn.click(cb_clone, [c_text, m_input, c_auto, c_ref, c_ref_text, c_preset, c_temp, c_top_p, c_seed, eng_state, l_input],
+    c_btn.click(save_clone_settings, [c_text, c_preset, c_auto, c_temp, c_top_p, c_seed, eng_input, l_input], None)
+    ev_clone = c_btn.click(cb_clone, [c_text, m_input, c_auto, c_ref, c_ref_text, c_preset, c_temp, c_top_p, c_seed, eng_input, l_input],
                            [c_out, c_text])
-    c_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_clone])
+    c_stop.click(lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()), None, None, queue=False, cancels=[ev_clone])
 
 
 def _build_voice_design_panel(lang_dd=None):
@@ -1712,7 +2569,7 @@ def _build_voice_design_panel(lang_dd=None):
             vd_text = gr.Textbox(label=T("text"), placeholder=T("ph_text"), lines=4,
                                  value="Здравствуйте! Это синтез речи с уникальным тембром, созданным по текстовому описанию.")
             vd_example_btn = gr.Button(T("example_btn"), size="sm", variant="secondary")
-            with gr.Accordion(T("advanced"), open=False):
+            with gr.Accordion(T("advanced"), open=True):
                 vd_lang = lang_dd if lang_dd is not None else gr.Dropdown(fe.LANGUAGE_CHOICES, value="auto", label=T("lang_label"))
                 vd_temp = gr.Slider(0.1, 1.5, 0.7, step=0.05, label="Text Temperature")
                 vd_top_p = gr.Slider(0.1, 1.0, 0.8, step=0.01, label="Text Top-p")
@@ -1755,7 +2612,7 @@ def _build_speech_edit_panel():
                 ed_ac_val = gr.Slider(-6.0, 6.0, 1.2, step=0.1, label=T("ac_val_label"))
                 ed_ac_custom = gr.Textbox(label=T("custom_inst_label"), placeholder="adjust the speed to 1.2x")
 
-            with gr.Accordion(T("advanced"), open=False):
+            with gr.Accordion(T("advanced"), open=True):
                 ed_steps = gr.Slider(1, 30, 10, step=1, label="DiT Flow Steps")
                 ed_cfg = gr.Slider(0.0, 3.0, 1.2, step=0.1, label="CFG")
                 ed_th = gr.Slider(0.1, 0.9, 0.5, step=0.05, label="Stop Threshold")
@@ -1787,16 +2644,15 @@ def _build_speech_edit_panel():
     ed_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_ed])
 
 
-def _build_long_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, llm_cfg=None, prefix="lc"):
+def _build_long_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, llm_cfg=None, prefix="lc", save_seed_cb=None):
     gui_cfg = gui_cfg or {}
     llm_cfg = llm_cfg or {}
-    is_higgs = "Higgs" in engine_name
     with gr.Row():
         with gr.Column():
             with gr.Group():
                 with gr.Row():
                     lc_custom_num = gr.Checkbox(label=T("lc_custom_num"), value=gui_cfg.get("lc_custom_num", False), scale=1)
-                    lc_num_input = gr.Textbox(value=gui_cfg.get("lc_num_input", "01"), scale=0, min_width=100, show_label=False)
+                    lc_num_input = gr.Textbox(value=gui_cfg.get("lc_num_input", "01"), scale=0, min_width=100, show_label=False, elem_id="lc-num-input")
             lc_btn_top = gr.Button(T("generate"), variant="primary", size="lg")
             lc_text = gr.Textbox(label=T("text"), placeholder=T("ph_clone"), lines=5, value=gui_cfg.get(f"{prefix}_text", gui_cfg.get("lc_text", "")))
             with gr.Row():
@@ -1811,13 +2667,13 @@ def _build_long_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=No
             lc_max_chars = gr.Slider(50, 500, gui_cfg.get("lc_max_chars", 150), step=10, label=T("max_chars_label"), info=T("max_chars_info"))
             lc_gap = gr.Slider(0.0, 2.0, gui_cfg.get("lc_gap", 0.3), step=0.1, label=T("gap_label"))
             lc_merge = gr.Checkbox(label=T("merge_label"), value=gui_cfg.get("lc_merge", True))
-            with gr.Accordion(T("advanced"), open=False):
-                lc_temp = gr.Slider(0.0, 1.5, gui_cfg.get("lc_temp", 1.0), step=0.05, label="Temperature")
+            with gr.Accordion(T("advanced"), open=True):
+                lc_temp = gr.Slider(0.0, 1.5, gui_cfg.get("lc_temp", 0.8), step=0.05, label="Temperature")
                 lc_top_p = gr.Slider(0.1, 1.0, gui_cfg.get("lc_top_p", 0.95), step=0.01, label="Top-p")
                 lc_seed = gr.Number(gui_cfg.get("lc_seed", -1), label=T("seed"), precision=0)
-            lc_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("lc_auto", False), visible=is_higgs)
+            lc_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("lc_auto", False), visible=True)
 
-            with gr.Accordion(T("llm_settings_title"), open=False, visible=is_higgs):
+            with gr.Accordion(T("llm_settings_title"), open=False, visible=True):
                 lc_api_url = gr.Textbox(label=T("api_url_label"), value=llm_cfg.get("api_url", "http://localhost:1234/v1"))
                 lc_api_key = gr.Textbox(label=T("api_key_label"), value=llm_cfg.get("api_key", ""), type="password")
                 lc_api_model = gr.Textbox(label=T("api_model_label"), value=llm_cfg.get("api_model", "gemma-2-12b-it"))
@@ -1841,23 +2697,359 @@ def _build_long_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=No
             lc_stop = gr.Button(T("stop"), variant="stop")
         with gr.Column():
             lc_out = gr.Audio(label=T("result"), type="filepath", autoplay=True)
+            lc_filename = gr.HTML("", elem_classes=["audio-filename-badge"])
             lc_log = gr.Textbox(label=T("long_clone_log"), lines=12)
             lc_files = gr.Files(label=T("result"), elem_classes=["scrollable-files"])
     lc_preset.change(cb_preset, [lc_preset], [lc_ref, lc_ref_text])
     lc_tr_btn.click(transcribe, [lc_ref], [lc_ref_text])
     lc_refresh.click(lambda: gr.update(choices=[OWN_FILE] + scan_voices()), None, [lc_preset])
     lc_upload.upload(load_text_file, [lc_upload], [lc_text])
-    eng_state = gr.State(engine_name)
+    eng_input = engine_name if isinstance(engine_name, gr.components.Component) else gr.State(engine_name)
     m_input = model_dd if model_dd is not None else gr.State(dr.DEFAULT_MODEL)
     l_input = lang_dd if lang_dd is not None else gr.State("auto")
+    s_seed_input = save_seed_cb if isinstance(save_seed_cb, gr.components.Component) else gr.State(True)
     lc_example_btn.click(cb_load_example, [l_input], [lc_text])
     for btn in [lc_btn, lc_btn_top]:
-        btn.click(save_long_clone_settings, [lc_text, lc_preset, lc_max_chars, lc_gap, lc_merge, lc_temp, lc_top_p, lc_seed, lc_auto, lc_custom_num, lc_num_input, eng_state, l_input], None)
-    ev_long_clone = lc_btn.click(cb_long_clone, [lc_text, m_input, lc_auto, lc_ref, lc_ref_text, lc_preset, lc_temp, lc_top_p, lc_seed, lc_max_chars, lc_gap, lc_merge, lc_api_url, lc_api_key, lc_api_model, lc_system_prompt, lc_custom_num, lc_num_input, eng_state, l_input],
-                                 [lc_log, lc_out, lc_files, lc_processed, lc_num_input])
-    ev_long_clone_top = lc_btn_top.click(cb_long_clone, [lc_text, m_input, lc_auto, lc_ref, lc_ref_text, lc_preset, lc_temp, lc_top_p, lc_seed, lc_max_chars, lc_gap, lc_merge, lc_api_url, lc_api_key, lc_api_model, lc_system_prompt, lc_custom_num, lc_num_input, eng_state, l_input],
-                                         [lc_log, lc_out, lc_files, lc_processed, lc_num_input])
-    lc_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_long_clone, ev_long_clone_top])
+        btn.click(save_long_clone_settings, [lc_text, lc_preset, lc_max_chars, lc_gap, lc_merge, lc_temp, lc_top_p, lc_seed, lc_auto, lc_custom_num, lc_num_input, eng_input, l_input], None)
+    ev_long_clone = lc_btn.click(
+        cb_long_clone,
+        [lc_text, m_input, lc_auto, lc_ref, lc_ref_text, lc_preset, lc_temp, lc_top_p, lc_seed, lc_max_chars, lc_gap, lc_merge, lc_api_url, lc_api_key, lc_api_model, lc_system_prompt, lc_custom_num, lc_num_input, eng_input, l_input, s_seed_input],
+        [lc_log, lc_out, lc_files, lc_processed, lc_num_input, lc_filename],
+        show_progress_on=[lc_out]
+    )
+    ev_long_clone_top = lc_btn_top.click(
+        cb_long_clone,
+        [lc_text, m_input, lc_auto, lc_ref, lc_ref_text, lc_preset, lc_temp, lc_top_p, lc_seed, lc_max_chars, lc_gap, lc_merge, lc_api_url, lc_api_key, lc_api_model, lc_system_prompt, lc_custom_num, lc_num_input, eng_input, l_input, s_seed_input],
+        [lc_log, lc_out, lc_files, lc_processed, lc_num_input, lc_filename],
+        show_progress_on=[lc_out]
+    )
+    lc_stop.click(lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()), None, None, queue=False, cancels=[ev_long_clone, ev_long_clone_top])
+
+
+def _build_batch_clone_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, llm_cfg=None, prefix="bc", save_seed_cb=None):
+    gui_cfg = gui_cfg or {}
+    llm_cfg = llm_cfg or {}
+
+    init_min, init_max = "01", "16"
+    try:
+        n_dir = OUTPUT_DIR / "NUM"
+        if n_dir.exists():
+            ptn = re.compile(r'^(\d+)\.(wav|mp3|flac|ogg)$', re.IGNORECASE)
+            fns = []
+            for p in n_dir.iterdir():
+                if p.is_file():
+                    m = ptn.match(p.name)
+                    if m:
+                        fns.append((int(m.group(1)), m.group(1)))
+            if fns:
+                fns.sort(key=lambda x: x[0])
+                init_min = fns[0][1]
+                init_max = fns[-1][1]
+    except Exception:
+        pass
+
+    with gr.Row():
+        with gr.Column():
+            with gr.Group():
+                gr.Markdown(f"### {T('bc_scenario_group')}")
+                with gr.Row():
+                    bc_file_path = gr.Textbox(
+                        label=T("bc_file_path"),
+                        value=gui_cfg.get("bc_file_path", "output/NUM/ru-en.txt"),
+                        scale=3
+                    )
+                    bc_upload = gr.UploadButton(
+                        T("bc_upload_btn"),
+                        file_types=[".txt"],
+                        size="sm",
+                        scale=1
+                    )
+                    bc_reload_btn = gr.Button(T("bc_reload_btn"), size="sm", scale=1)
+
+                with gr.Row():
+                    bc_lang = gr.Dropdown(
+                        ["EN", "RU", "ALL"],
+                        value=gui_cfg.get("bc_lang", "EN"),
+                        label=T("bc_lang"),
+                        scale=1
+                    )
+                    bc_num_from = gr.Textbox(
+                        value=gui_cfg.get("bc_num_from", "01"),
+                        label=T("bc_from"),
+                        scale=1
+                    )
+                    bc_num_to = gr.Textbox(
+                        value=gui_cfg.get("bc_num_to", "33"),
+                        label=T("bc_to"),
+                        scale=1
+                    )
+                    bc_to_end = gr.Checkbox(
+                        label=T("bc_to_end"),
+                        value=gui_cfg.get("bc_to_end", False),
+                        scale=1
+                    )
+                    bc_load_btn = gr.Button(T("bc_load_btn"), size="sm", scale=1)
+
+                bc_text = gr.Textbox(
+                    label=T("bc_text_label"),
+                    placeholder=T("bc_text_ph"),
+                    lines=3
+                )
+
+                bc_skip_existing = gr.Checkbox(
+                    label=T("bc_skip_existing"),
+                    value=gui_cfg.get("bc_skip_existing", True)
+                )
+                bc_stats = gr.Markdown(value=T("bc_stats_hint"))
+
+            with gr.Row():
+                bc_btn = gr.Button(T("bc_btn"), variant="primary", size="lg", scale=3)
+                bc_stop = gr.Button(T("stop"), variant="stop", scale=1)
+
+            # Голос и настройки клонирования
+            bc_preset = gr.Dropdown([OWN_FILE] + scan_voices(), value=gui_cfg.get("lc_preset", OWN_FILE), label=T("voice_preset"))
+            bc_refresh = gr.Button(T("refresh"), size="sm")
+            bc_ref = gr.Audio(label=T("ref_voice"), type="filepath", sources=["upload", "microphone"])
+            bc_ref_text = gr.Textbox(label=T("ref_text"), lines=2, placeholder=T("ph_clone_tr"))
+            bc_tr_btn = gr.Button(T("transcribe_btn"), size="sm")
+
+            with gr.Accordion(T("advanced"), open=True):
+                bc_temp = gr.Slider(0.0, 1.5, gui_cfg.get("lc_temp", 0.8), step=0.05, label="Temperature")
+                bc_top_p = gr.Slider(0.1, 1.0, gui_cfg.get("lc_top_p", 0.95), step=0.01, label="Top-p")
+                bc_seed = gr.Number(gui_cfg.get("lc_seed", -1), label=T("seed"), precision=0)
+
+            bc_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("lc_auto", False), visible=True)
+
+            with gr.Accordion(T("llm_settings_title"), open=False, visible=True):
+                bc_api_url = gr.Textbox(label=T("api_url_label"), value=llm_cfg.get("api_url", "http://localhost:1234/v1"))
+                bc_api_key = gr.Textbox(label=T("api_key_label"), value=llm_cfg.get("api_key", ""), type="password")
+                bc_api_model = gr.Textbox(label=T("api_model_label"), value=llm_cfg.get("api_model", "gemma-2-12b-it"))
+                bc_system_prompt = gr.Textbox(label=T("system_prompt_label"), value=llm_cfg.get("system_prompt", ""), lines=4)
+                bc_save_btn = gr.Button(T("save_settings_btn"), variant="secondary")
+                bc_test_btn = gr.Button(T("test_connection_btn"), variant="secondary")
+                bc_save_status = gr.Markdown()
+
+                bc_save_btn.click(
+                    save_llm_config,
+                    [bc_api_url, bc_api_key, bc_api_model, bc_system_prompt],
+                    [bc_save_status]
+                )
+                bc_test_btn.click(
+                    cb_test_llm_connection,
+                    [bc_api_url, bc_api_key, bc_api_model],
+                    [bc_save_status]
+                )
+
+            # Секция склеивания фрагментов в папке NUM
+            with gr.Group():
+                gr.Markdown(f"### {T('bc_merge_group')}")
+                with gr.Row():
+                    bc_scan_btn = gr.Button(T("bc_scan_btn"), variant="secondary", scale=2)
+                    bc_merge_from = gr.Textbox(label=T("bc_from"), value=init_min, scale=1)
+                    bc_merge_to = gr.Textbox(label=T("bc_to"), value=init_max, scale=1)
+                    bc_merge_gap = gr.Slider(0.0, 5.0, 0.5, step=0.1, label=T("bc_merge_gap"), scale=2)
+                bc_merge_btn = gr.Button(T("bc_merge_btn"), variant="primary", size="lg")
+
+        with gr.Column():
+            bc_out = gr.Audio(label=T("result"), type="filepath", autoplay=True)
+            bc_filename = gr.HTML("", elem_classes=["audio-filename-badge"])
+
+            init_script_path = gui_cfg.get("bc_file_path", "output/NUM/ru-en.txt")
+            init_script_lang = gui_cfg.get("bc_lang", "EN")
+            init_decades = get_script_decades(init_script_path, init_script_lang)
+            init_decade = init_decades[0] if init_decades else "01-10"
+            init_btn_upds, init_radio_upd = get_decade_data(init_decade, init_script_path, init_script_lang)
+
+            with gr.Group():
+                gr.Markdown(f"### {T('bc_decades_group')}")
+                bc_decade_radio = gr.Radio(
+                    choices=init_decades,
+                    value=init_decade,
+                    label=T("bc_decade_radio_label"),
+                    elem_classes=["decade-radio"]
+                )
+
+                bc_slot_btns = []
+                with gr.Row():
+                    for k in range(5):
+                        upd = init_btn_upds[k] if k < len(init_btn_upds) else {}
+                        bc_slot_btns.append(
+                            gr.Button(
+                                value=upd.get("value", ""),
+                                variant=upd.get("variant", "secondary"),
+                                visible=upd.get("visible", True),
+                                size="sm",
+                                min_width=50,
+                                scale=1,
+                                elem_classes=["decade-slot-btn"]
+                            )
+                        )
+                with gr.Row():
+                    for k in range(5, 10):
+                        upd = init_btn_upds[k] if k < len(init_btn_upds) else {}
+                        bc_slot_btns.append(
+                            gr.Button(
+                                value=upd.get("value", ""),
+                                variant=upd.get("variant", "secondary"),
+                                visible=upd.get("visible", True),
+                                size="sm",
+                                min_width=50,
+                                scale=1,
+                                elem_classes=["decade-slot-btn"]
+                            )
+                        )
+
+                bc_decade_list = gr.Radio(
+                    choices=init_radio_upd.get("choices", []),
+                    value=None,
+                    label=T("bc_decade_list_label"),
+                    interactive=True
+                )
+
+            bc_log = gr.Textbox(label=T("bc_log_label"), lines=8)
+            with gr.Accordion(T("bc_files_accordion"), open=False):
+                bc_files = gr.Files(label=T("result"), value=get_num_files_list, elem_classes=["scrollable-files"])
+
+    bc_preset.change(cb_preset, [bc_preset], [bc_ref, bc_ref_text])
+    bc_tr_btn.click(transcribe, [bc_ref], [bc_ref_text])
+    bc_refresh.click(lambda: gr.update(choices=[OWN_FILE] + scan_voices()), None, [bc_preset])
+
+    eng_input = engine_name if isinstance(engine_name, gr.components.Component) else gr.State(engine_name)
+    m_input = model_dd if model_dd is not None else gr.State(dr.DEFAULT_MODEL)
+    l_input = lang_dd if lang_dd is not None else gr.State("auto")
+    s_seed_input = save_seed_cb if isinstance(save_seed_cb, gr.components.Component) else gr.State(True)
+
+    def cb_refresh_stats(path, lang):
+        items = parse_batch_script(path, lang=lang)
+        if not items:
+            return "❌ Сценарий пуст или файл не найден."
+        num_dir = OUTPUT_DIR / "NUM"
+        existing = set()
+        if num_dir.exists():
+            for p in num_dir.iterdir():
+                if p.is_file():
+                    m = re.match(r'^(\d+)\.(wav|mp3|flac|ogg)$', p.name, re.IGNORECASE)
+                    if m:
+                        existing.add(int(m.group(1)))
+        first_num = items[0]['num_str']
+        last_num = items[-1]['num_str']
+        already_done = len([it for it in items if it['num'] in existing])
+        return f"📖 Загружено **{len(items)}** фрагментов (от **{first_num}** до **{last_num}**). Уже есть в папке NUM: **{already_done}** шт."
+
+    def cb_on_decade_change(decade_str, file_path, lang):
+        btn_upds, radio_upd = get_decade_data(decade_str, file_path, lang)
+        return btn_upds + [radio_upd]
+
+    bc_decade_radio.change(
+        fn=cb_on_decade_change,
+        inputs=[bc_decade_radio, bc_file_path, bc_lang],
+        outputs=bc_slot_btns + [bc_decade_list]
+    )
+
+    def cb_refresh_decades(file_path, lang):
+        decades = get_script_decades(file_path, lang)
+        val = decades[0] if decades else "01-10"
+        btn_upds, radio_upd = get_decade_data(val, file_path, lang)
+        return [gr.update(choices=decades, value=val)] + btn_upds + [radio_upd]
+
+    bc_reload_btn.click(cb_refresh_stats, [bc_file_path, bc_lang], [bc_stats])
+    bc_reload_btn.click(
+        cb_refresh_decades,
+        [bc_file_path, bc_lang],
+        [bc_decade_radio] + bc_slot_btns + [bc_decade_list]
+    )
+
+    bc_upload.upload(
+        lambda f: (f.name if hasattr(f, "name") else str(f), cb_refresh_stats(f.name if hasattr(f, "name") else str(f), "EN")),
+        [bc_upload],
+        [bc_file_path, bc_stats]
+    )
+    bc_upload.upload(
+        lambda f: cb_refresh_decades(f.name if hasattr(f, "name") else str(f), "EN"),
+        [bc_upload],
+        [bc_decade_radio] + bc_slot_btns + [bc_decade_list]
+    )
+
+    bc_lang.change(cb_refresh_stats, [bc_file_path, bc_lang], [bc_stats])
+    bc_lang.change(
+        cb_refresh_decades,
+        [bc_file_path, bc_lang],
+        [bc_decade_radio] + bc_slot_btns + [bc_decade_list]
+    )
+
+    # Инспекция и перегенерация выбранного фрагмента
+    inspect_outputs = [bc_text, bc_num_from, bc_num_to, bc_to_end, bc_skip_existing, bc_out, bc_filename, bc_log, bc_decade_list]
+
+    for btn in bc_slot_btns:
+        btn.click(
+            fn=cb_inspect_fragment,
+            inputs=[btn, bc_file_path, bc_lang, bc_log],
+            outputs=inspect_outputs
+        )
+
+    bc_decade_list.change(
+        fn=cb_inspect_fragment,
+        inputs=[bc_decade_list, bc_file_path, bc_lang, bc_log],
+        outputs=inspect_outputs
+    )
+
+    bc_load_btn.click(
+        fn=cb_inspect_fragment,
+        inputs=[bc_num_from, bc_file_path, bc_lang, bc_log],
+        outputs=inspect_outputs
+    )
+
+    bc_files.select(
+        fn=cb_inspect_fragment,
+        inputs=[bc_files, bc_file_path, bc_lang, bc_log],
+        outputs=inspect_outputs
+    )
+
+    bc_scan_btn.click(cb_scan_num_folder, None, [bc_merge_from, bc_merge_to, bc_log])
+
+    bc_merge_btn.click(
+        cb_merge_num_folder,
+        [bc_merge_from, bc_merge_to, bc_merge_gap],
+        [bc_log, bc_out, bc_files, bc_filename],
+        show_progress_on=[bc_out]
+    )
+    bc_merge_btn.click(
+        fn=lambda: get_num_files_list(),
+        outputs=[bc_files]
+    )
+
+    bc_btn.click(
+        save_batch_clone_settings,
+        [bc_file_path, bc_lang, bc_num_from, bc_num_to, bc_to_end, bc_skip_existing,
+         bc_preset, bc_temp, bc_top_p, bc_seed, bc_auto, eng_input, l_input],
+        None
+    )
+
+    ev_batch_clone = bc_btn.click(
+        cb_batch_clone,
+        [bc_file_path, bc_lang, bc_num_from, bc_num_to, bc_to_end, bc_skip_existing,
+         bc_preset, bc_ref, bc_ref_text, bc_temp, bc_top_p, bc_seed, bc_auto,
+         bc_api_url, bc_api_key, bc_api_model, bc_system_prompt,
+         eng_input, l_input, s_seed_input, bc_text],
+        [bc_log, bc_out, bc_files, bc_filename],
+        show_progress_on=[bc_out]
+    )
+
+    ev_batch_clone.then(
+        fn=cb_on_decade_change,
+        inputs=[bc_decade_radio, bc_file_path, bc_lang],
+        outputs=bc_slot_btns + [bc_decade_list]
+    )
+
+    bc_stop.click(
+        lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()),
+        None, None, queue=False, cancels=[ev_batch_clone]
+    )
+    bc_stop.click(
+        fn=cb_on_decade_change,
+        inputs=[bc_decade_radio, bc_file_path, bc_lang],
+        outputs=bc_slot_btns + [bc_decade_list]
+    )
 
 
 def _build_podcast_panel(engine_name, model_dd=None, lang_dd=None):
@@ -1873,10 +3065,10 @@ def _build_podcast_panel(engine_name, model_dd=None, lang_dd=None):
     p_stop = gr.Button(T("stop"), variant="stop")
     p_out = gr.Audio(label=T("result"), type="filepath", autoplay=True)
     p_script_btn.click(cb_podcast_script, [p_topic, p_num, p_model], [p_script])
-    eng_state = gr.State(engine_name)
+    eng_input = engine_name if isinstance(engine_name, gr.components.Component) else gr.State(engine_name)
     l_input = lang_dd if lang_dd is not None else gr.State("auto")
-    ev_pod = p_btn.click(cb_multi_synth, [p_script] + p_audios + p_texts + [eng_state, l_input], p_out)
-    p_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_pod])
+    ev_pod = p_btn.click(cb_multi_synth, [p_script] + p_audios + p_texts + [eng_input, l_input], p_out)
+    p_stop.click(lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()), None, None, queue=False, cancels=[ev_pod])
 
 
 def _build_audiobook_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None):
@@ -1897,29 +3089,28 @@ def _build_audiobook_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=Non
     b_markup.click(save_book_settings, [b_text], None)
     b_markup.click(cb_book_markup, [b_text, b_num, b_model], [b_script])
     b_btn.click(save_book_settings, [b_text], None)
-    eng_state = gr.State(engine_name)
+    eng_input = engine_name if isinstance(engine_name, gr.components.Component) else gr.State(engine_name)
     l_input = lang_dd if lang_dd is not None else gr.State("auto")
-    ev_book = b_btn.click(cb_multi_synth, [b_script] + b_audios + b_texts + [eng_state, l_input], b_out)
-    b_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_book])
+    ev_book = b_btn.click(cb_multi_synth, [b_script] + b_audios + b_texts + [eng_input, l_input], b_out)
+    b_stop.click(lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()), None, None, queue=False, cancels=[ev_book])
 
 
 def _build_batch_panel(engine_name, model_dd=None, lang_dd=None, gui_cfg=None, prefix="bt"):
     gui_cfg = gui_cfg or {}
-    is_higgs = "Higgs" in engine_name
     bt_text = gr.Textbox(label=T("batch_text"), placeholder=T("ph_batch"), lines=6, value=gui_cfg.get(f"{prefix}_text", gui_cfg.get("bt_text", "")))
     bt_upload = gr.UploadButton(T("upload_txt"), file_types=[".txt"], size="sm")
-    bt_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("bt_auto", False), visible=is_higgs)
+    bt_auto = gr.Checkbox(label=T("auto_enrich"), value=gui_cfg.get("bt_auto", False), visible=True)
     bt_btn = gr.Button(T("generate"), variant="primary", size="lg")
     bt_stop = gr.Button(T("stop"), variant="stop")
     bt_log = gr.Textbox(label=T("log"), lines=8)
     bt_files = gr.Files(label=T("result"), elem_classes=["scrollable-files"])
     bt_upload.upload(load_text_file, [bt_upload], [bt_text])
     bt_btn.click(save_batch_settings, [bt_text, bt_auto], None)
-    eng_state = gr.State(engine_name)
+    eng_input = engine_name if isinstance(engine_name, gr.components.Component) else gr.State(engine_name)
     m_input = model_dd if model_dd is not None else gr.State(dr.DEFAULT_MODEL)
     l_input = lang_dd if lang_dd is not None else gr.State("auto")
-    ev_batch = bt_btn.click(cb_batch, [bt_text, m_input, bt_auto, eng_state, l_input], [bt_log, bt_files])
-    bt_stop.click(lambda: (eng.request_cancel(), fe.request_cancel()), None, None, queue=False, cancels=[ev_batch])
+    ev_batch = bt_btn.click(cb_batch, [bt_text, m_input, bt_auto, eng_input, l_input], [bt_log, bt_files])
+    bt_stop.click(lambda: (eng.request_cancel(), fe.request_cancel(), de.request_cancel()), None, None, queue=False, cancels=[ev_batch])
 
 
 def build():
@@ -1938,8 +3129,29 @@ def build():
         gr.HTML(T("brand_header_html"))
 
         with gr.Row():
-            cpu_cb = gr.Checkbox(label=T("cpu_only_label"), value=gui_cfg.get("cpu_only", False), scale=1)
-            keep_cb = gr.Checkbox(label=T("keep_vram_label"), value=gui_cfg.get("keep_vram", False), scale=1)
+            engine_dd = gr.Dropdown(
+                ENGINE_CHOICES,
+                value=gui_cfg.get("engine_choice", ENGINE_HIGGS),
+                label=T("engine_label"),
+                scale=2
+            )
+            model_dd = gr.Dropdown(
+                MODEL_CHOICES,
+                value=gui_cfg.get("model_dd", dr.DEFAULT_MODEL),
+                label=T("director_model"),
+                scale=2
+            )
+            lang_dd = gr.Dropdown(
+                fe.LANGUAGE_CHOICES,
+                value=gui_cfg.get("language_choice", "auto"),
+                label=T("lang_label"),
+                scale=1
+            )
+
+        engine_dd.change(lambda x: update_gui_config("engine_choice", x), [engine_dd], None)
+        model_dd.change(lambda x: update_gui_config("model_dd", x), [model_dd], None)
+        lang_dd.change(lambda x: update_gui_config("language_choice", x), [lang_dd], None)
+
         with gr.Row():
             fmt_dd = gr.Radio(["mp3", "wav", "flac", "ogg"], value=gui_cfg.get("out_format", "mp3"), label=T("out_format"), elem_classes=["fmt-radio-row"], scale=1)
             quant_dd = gr.Dropdown([("bf16 — высокое качество (рекомендуется)", "bf16"),
@@ -1947,6 +3159,10 @@ def build():
                                     ("4-bit — минимум VRAM (только Higgs)", "4bit"),
                                     ("fp32 — полная точность", "fp32")],
                                    value=gui_cfg.get("precision", "bf16"), label=T("quant"), scale=1)
+            cpu_cb = gr.Checkbox(label=T("cpu_only_label"), value=gui_cfg.get("cpu_only", False), scale=1)
+            with gr.Column(scale=1):
+                keep_cb = gr.Checkbox(label=T("keep_vram_label"), value=gui_cfg.get("keep_vram", False))
+                save_seed_cb = gr.Checkbox(label=T("save_seed_label"), value=gui_cfg.get("save_seed", True))
 
         def on_cpu_change(val):
             update_gui_config("cpu_only", val)
@@ -1968,6 +3184,12 @@ def build():
 
         keep_cb.change(on_keep_change, [keep_cb], None)
 
+        def on_save_seed_change(val):
+            set_save_seed(val)
+            update_gui_config("save_seed", val)
+
+        save_seed_cb.change(on_save_seed_change, [save_seed_cb], None)
+
         def on_quant_change(p):
             update_gui_config("precision", p)
             eng.set_precision(p)
@@ -1981,66 +3203,30 @@ def build():
 
         fmt_dd.change(on_format_change, [fmt_dd], None)
 
-        # Главные вкладки переключения движков (Higgs Audio v3.1 / FireRedTTS3)
-        with gr.Tabs(elem_classes=["engine-main-tabs"], selected=gui_cfg.get("active_engine_index", 0)) as engine_tabs:
-            # =========================================================================
-            # Вкладка 1: Higgs Audio v3.1 (100+ языков, Эмоции & Режиссёр)
-            # =========================================================================
-            with gr.Tab(T("engine_higgs_tab"), id=0):
-                with gr.Row(elem_classes=["engine-dropdown-row"]):
-                    h_model_dd = gr.Dropdown(MODEL_CHOICES, value=gui_cfg.get("model_dd", dr.DEFAULT_MODEL), label=T("director_model"), scale=2)
-                h_model_dd.change(lambda x: update_gui_config("model_dd", x), [h_model_dd], None)
+        # Главные плоские вкладки приложения
+        with gr.Tabs(selected=gui_cfg.get("active_tab_index", 4)) as tabs:
+            with gr.Tab(T("tab_tts"), id=0):
+                _build_tts_panel(engine_dd, model_dd=model_dd, lang_dd=lang_dd, gui_cfg=gui_cfg, prefix="t")
+            with gr.Tab(T("tab_expr"), id=1):
+                _build_expr_panel(model_dd=model_dd, engine_dd=engine_dd, lang_dd=lang_dd, gui_cfg=gui_cfg)
+            with gr.Tab(T("tab_clone"), id=2):
+                _build_clone_panel(engine_dd, model_dd=model_dd, lang_dd=lang_dd, gui_cfg=gui_cfg, prefix="c")
+            with gr.Tab(T("tab_long_clone"), id=3):
+                _build_long_clone_panel(engine_dd, model_dd=model_dd, lang_dd=lang_dd, gui_cfg=gui_cfg, llm_cfg=llm_cfg, prefix="lc", save_seed_cb=save_seed_cb)
+            with gr.Tab(T("tab_batch_clone"), id=4):
+                _build_batch_clone_panel(engine_dd, model_dd=model_dd, lang_dd=lang_dd, gui_cfg=gui_cfg, llm_cfg=llm_cfg, prefix="bc", save_seed_cb=save_seed_cb)
+            with gr.Tab(T("tab_design"), id=5):
+                _build_voice_design_panel(lang_dd=lang_dd)
+            with gr.Tab(T("tab_edit"), id=6):
+                _build_speech_edit_panel()
+            with gr.Tab(T("tab_pod"), id=7):
+                _build_podcast_panel(engine_dd, model_dd=model_dd, lang_dd=lang_dd)
+            with gr.Tab(T("tab_book"), id=8):
+                _build_audiobook_panel(engine_dd, model_dd=model_dd, lang_dd=lang_dd, gui_cfg=gui_cfg)
+            with gr.Tab(T("tab_batch"), id=9):
+                _build_batch_panel(engine_dd, model_dd=model_dd, lang_dd=lang_dd, gui_cfg=gui_cfg, prefix="bt")
 
-                with gr.Tabs(elem_classes=["sub-tabs"], selected=gui_cfg.get("h_subtab", 0)) as h_subtabs:
-                    with gr.Tab(T("tab_tts"), id=0):
-                        _build_tts_panel(ENGINE_HIGGS, model_dd=h_model_dd, gui_cfg=gui_cfg, prefix="t_h")
-                    with gr.Tab(T("tab_expr"), id=1):
-                        _build_expr_panel(model_dd=h_model_dd, gui_cfg=gui_cfg)
-                    with gr.Tab(T("tab_clone"), id=2):
-                        _build_clone_panel(ENGINE_HIGGS, model_dd=h_model_dd, gui_cfg=gui_cfg, prefix="c_h")
-                    with gr.Tab(T("tab_long_clone"), id=3):
-                        _build_long_clone_panel(ENGINE_HIGGS, model_dd=h_model_dd, gui_cfg=gui_cfg, llm_cfg=llm_cfg, prefix="lc_h")
-                    with gr.Tab(T("tab_pod"), id=4):
-                        _build_podcast_panel(ENGINE_HIGGS, model_dd=h_model_dd)
-                    with gr.Tab(T("tab_book"), id=5):
-                        _build_audiobook_panel(ENGINE_HIGGS, model_dd=h_model_dd, gui_cfg=gui_cfg)
-                    with gr.Tab(T("tab_batch"), id=6):
-                        _build_batch_panel(ENGINE_HIGGS, model_dd=h_model_dd, gui_cfg=gui_cfg, prefix="bt_h")
-                h_subtabs.select(lambda evt: (update_gui_config("h_subtab", _safe_tab_idx(evt)) if _safe_tab_idx(evt) is not None else None), None, None, queue=False)
-
-            # =========================================================================
-            # Вкладка 2: FireRedTTS3 (24 языка, Voice Design, Редактирование речи)
-            # =========================================================================
-            with gr.Tab(T("engine_firered_tab"), id=1):
-                with gr.Row(elem_classes=["engine-dropdown-row"]):
-                    fr_lang_dd = gr.Dropdown(fe.LANGUAGE_CHOICES, value=gui_cfg.get("language_choice", "auto"), label=T("lang_label"), scale=2)
-                fr_lang_dd.change(lambda x: update_gui_config("language_choice", x), [fr_lang_dd], None)
-
-                with gr.Tabs(elem_classes=["sub-tabs"], selected=gui_cfg.get("fr_subtab", 0)) as fr_subtabs:
-                    with gr.Tab(T("tab_tts"), id=0):
-                        _build_tts_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd, gui_cfg=gui_cfg, prefix="t_fr")
-                    with gr.Tab(T("tab_clone"), id=1):
-                        _build_clone_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd, gui_cfg=gui_cfg, prefix="c_fr")
-                    with gr.Tab(T("tab_design"), id=2):
-                        _build_voice_design_panel(lang_dd=fr_lang_dd)
-                    with gr.Tab(T("tab_edit"), id=3):
-                        _build_speech_edit_panel()
-                    with gr.Tab(T("tab_long_clone"), id=4):
-                        _build_long_clone_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd, gui_cfg=gui_cfg, llm_cfg=llm_cfg, prefix="lc_fr")
-                    with gr.Tab(T("tab_pod"), id=5):
-                        _build_podcast_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd)
-                    with gr.Tab(T("tab_book"), id=6):
-                        _build_audiobook_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd, gui_cfg=gui_cfg)
-                    with gr.Tab(T("tab_batch"), id=7):
-                        _build_batch_panel(ENGINE_FIRERED, lang_dd=fr_lang_dd, gui_cfg=gui_cfg, prefix="bt_fr")
-                fr_subtabs.select(lambda evt: (update_gui_config("fr_subtab", _safe_tab_idx(evt)) if _safe_tab_idx(evt) is not None else None), None, None, queue=False)
-
-        def on_engine_tab_select(evt=None):
-            idx = _safe_tab_idx(evt)
-            if idx is not None:
-                update_gui_config("active_engine_index", idx)
-
-        engine_tabs.select(on_engine_tab_select, None, None, queue=False)
+        tabs.select(lambda evt: (update_gui_config("active_tab_index", _safe_tab_idx(evt)) if _safe_tab_idx(evt) is not None else None), None, None, queue=False)
 
     return demo
 
@@ -2066,6 +3252,7 @@ if __name__ == "__main__":
     eng.set_precision(precision_val)
     fe.set_precision("int8" if precision_val == "8bit" else precision_val)
     set_out_format(cfg.get("out_format", "mp3"))
+    set_save_seed(cfg.get("save_seed", True))
     prewarm()
     demo = build().queue(default_concurrency_limit=1)
 

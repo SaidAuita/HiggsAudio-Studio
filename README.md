@@ -1,12 +1,12 @@
 <div align="center">
 
-# 🎙️ Higgs Audio Studio & FireRedTTS3
+# 🎙️ Audio Studio TTS
 
 <!-- super-markdown-toc -->
 
 ## Table of Contents
 
-* [Higgs Audio Studio & FireRedTTS3](#higgs-audio-studio--fireredtts3)
+* [Audio Studio TTS](#audio-studio-tts)
   + [Features](#features)
   + [Dual-Engine Architecture](#dual-engine-architecture)
   + [System Requirements](#system-requirements)
@@ -37,6 +37,7 @@
 
 * **🎙️ Dual-Engine Architecture** — switch on the fly between **Higgs Audio v3.1** (theatrical emotions, sighs, laughter, 43 inline tags) and **FireRedTTS3** (crystal-clear audio, 10-step DiT Flow Matching, zero hallucinations).
 * **🧬 Zero-Shot Voice Cloning** — clone any voice from a short reference audio clip (3–6 seconds) with automatic transcript recognition (Moonshine ASR). Full support for cross-lingual cloning (e.g. Russian reference ➔ English speech).
+* **🎬 Batch Clone & Video Translation Workflow** — automated sequential synthesis of video subtitle/transcript fragments (`ru-en.txt` ➔ `01.wav`, `02.wav`...), decade navigation (`01-10`, `11-20`...), direct 1-click inspection & re-voicing per fragment, and seamless gap-controlled concatenation (`01-33.wav`).
 * **🎨 Voice Design** — generate brand new voices from descriptive natural-language prompts («*A warm, confident male voice in his 30s speaking Russian at a steady pace*»).
 * **✂️ Speech Editing** — modify, insert, or delete words in existing audio without re-recording, with fine-grained control over speed, pitch, and volume.
 * **🎭 Expressive Speech & AI Director** — insert 43 inline emotion tags (`<|emotion:happy|>`), sound effects (`<|sfx:laughter|>`), prosody, and style controls + auto-enrichment via local LLM or External API (LM Studio, Ollama, OpenAI).
@@ -111,12 +112,47 @@
 * **End-of-Speech VAD Cleaning (`trim_trailing_artifacts`)**:
   * Eliminates vocoder boundary clicks, trailing diffusion noise, and repeating hallucinations on short sentences and single words.
   * Optimized diffusion step calculation, accelerating short-phrase synthesis up to 3.5×.
+* **Batch Clone & Educational Video Translation Workflow**:
+  <p align="center">
+    <img src="images/Audio%20Studio%20Batch%20clone.png" alt="Audio Studio TTS — Batch Clone Mode" width="800"/>
+  </p>
+
+  * **Automated Sequential Voicing**: Ingests bilingual or monolingual cue scripts (e.g. `ru-en.txt`) and synthesizes individual chunks (`01.wav`, `02.wav`...) saved directly to `output/NUM/`.
+  * **Interactive Decade Navigation**: Browse large scripts effortlessly by decades (`01-10`, `11-20`, `21-30`...) with 10 direct-access buttons showing live readiness badges (`✅ 21` ready, `⚪ 25` missing) and full replica previews.
+  * **Instant 1-Click Inspection & Re-Voicing**: Clicking any fragment immediately loads its waveform into the player, populates the text field, sets the range (`From 21` to `To 21`), and enables immediate re-generation if a specific intonation needs fine-tuning.
+  * **Integrated Audio Merger**: Stitch verified chunks from custom range (`From 01` to `To 33`) into a single output file (e.g. `01-33.wav` with automatic `_01` suffix collision protection) with customizable inter-phrase pause gaps (default 0.5s).
+  * **Engineered for Video Localization**: Tailored for dubbing tutorials, YouTube courses, and educational videos with natural cloned voices.
 * **Process Isolation for RTX 30xx/40xx/50xx**:
   * Background daemon `director_daemon.py` isolates CUDA contexts between `llama.cpp` and `PyTorch`, preventing crashes.
 * **Long Voice Cloning with Auto-Numbering**:
   * Batch synthesis for audiobook chapters with automatic file numbering (`01`, `02`, `03`...) saved to `output/NUM/`.
 * **Full Bilingual Support (RU / EN)**:
   * 100% translation coverage for all UI elements, tabs, dropdowns, examples, and tooltips.
+
+---
+
+### 💎 QR Code with Custom Shape Logo
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="https://ph-cu-s.com/ai-code-pro">
+        <img src="docs/ai_code_pro.png" width="130" alt="AI Code PRO - Custom Shape Logo QR Code" /><br/>
+        <b>AI Code PRO</b>
+      </a><br/>
+      <sub>Vector Barcodes (18 Standards) & Designer QR Codes for <b>Adobe Illustrator</b></sub><br/><br/>
+      <a href="https://ph-cu-s.com/ai-code-pro"><img src="https://img.shields.io/badge/PRO-Illustrator%20Extension-orange.svg" alt="AI Code PRO" /></a>
+    </td>
+    <td align="center" width="50%">
+      <a href="https://ph-cu-s.com/id-code-pro">
+        <img src="docs/id_code_pro.png" width="130" alt="ID Code PRO - Custom Shape Logo QR Code" /><br/>
+        <b>ID Code PRO</b>
+      </a><br/>
+      <sub>Vector Barcodes (18 Standards) & Designer QR Codes for <b>Adobe InDesign</b></sub><br/><br/>
+      <a href="https://ph-cu-s.com/id-code-pro"><img src="https://img.shields.io/badge/PRO-InDesign%20Extension-purple.svg" alt="ID Code PRO" /></a>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -141,6 +177,4 @@ Wrapper code is open-source. Higgs Audio v3 and FireRedTTS3 model weights are pr
 If this project is helpful to you and you wish to support its development:
 * **USDT (TRC20):** `TBWzmMZWbirvACAtPfoZioAhhwSM4n2ArY`
 * **Website:** [Ph-CU-S.com](https://ph-cu-s.com) (Photoshop to ComfyUI Plugin)
- - Grouped custom number controls into a harmonious single-line block matching standard Gradio component height.
-  - Removed Gradio component-level progress overlays so input boxes and number controls remain clutter-free.
 
