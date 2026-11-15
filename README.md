@@ -122,6 +122,7 @@
   * **Instant 1-Click Inspection & Re-Voicing**: Clicking any fragment immediately loads its waveform into the player, populates the text field, sets the range (`From 21` to `To 21`), and enables immediate re-generation if a specific intonation needs fine-tuning.
   * **Integrated Audio Merger**: Stitch verified chunks from custom range (`From 01` to `To 33`) into a single output file (e.g. `01-33.wav` with automatic `_01` suffix collision protection) with customizable inter-phrase pause gaps (default 0.5s).
   * **Engineered for Video Localization**: Tailored for dubbing tutorials, YouTube courses, and educational videos with natural cloned voices.
+  * **Ready-to-Use Script Format & Sample**: A 5-fragment sample script is provided in [`examples/batch_script_sample.txt`](examples/batch_script_sample.txt) supporting cue numbers (`[01.wav]`) and bilingual tags (`RU:` / `EN:`).
 * **Process Isolation for RTX 30xx/40xx/50xx**:
   * Background daemon `director_daemon.py` isolates CUDA contexts between `llama.cpp` and `PyTorch`, preventing crashes.
 * **Long Voice Cloning with Auto-Numbering**:

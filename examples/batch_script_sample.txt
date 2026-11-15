@@ -1,0 +1,21 @@
+# Educational Video Tutorial / Пример сценария обучающего видеоролика
+
+[01.wav]
+RU: Привет! В этом видеоуроке мы подробно разберём, как быстро настроить и использовать локальную студию синтеза речи.
+EN: Hello! In this video tutorial, we will explore in detail how to quickly set up and use the local speech synthesis studio.
+
+[02.wav]
+RU: Для начала выберите подходящий движок и загрузите аудио-образец голоса длительностью всего от трёх до пяти секунд.
+EN: To start, select a suitable engine and upload a reference voice sample between three and five seconds long.
+
+[03.wav]
+RU: Система автоматически распознает транскрипт референса и подготовит акустические эмбеддинги для точного клонирования.
+EN: The system will automatically transcribe the reference audio and extract acoustic embeddings for precise cloning.
+
+[04.wav]
+RU: В режиме пакетной озвучки вы можете озвучить весь сценарий по фрагментам и при необходимости переозвучить любую фразу в один клик.
+EN: In batch clone mode, you can voice the entire script chunk by chunk and re-voice any specific line with a single click.
+
+[05.wav]
+RU: После проверки всех частей просто задайте паузу и нажмите кнопку склейки, чтобы получить готовый аудиофайл для монтажа.
+EN: After verifying all parts, simply set the desired pause and click merge to get a final audio file ready for video editing.

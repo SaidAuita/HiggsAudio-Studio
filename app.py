@@ -1717,9 +1717,12 @@ def parse_batch_script(content_or_path, lang="EN"):
     elif isinstance(content_or_path, str) and ("\n" in content_or_path or "[" in content_or_path):
         content = content_or_path
     else:
+        alt0 = SCRIPT_DIR / content_or_path
         alt1 = OUTPUT_DIR / content_or_path
         alt2 = Path.cwd() / content_or_path
-        if alt1.is_file():
+        if alt0.is_file():
+            content = alt0.read_text(encoding="utf-8", errors="replace")
+        elif alt1.is_file():
             content = alt1.read_text(encoding="utf-8", errors="replace")
         elif alt2.is_file():
             content = alt2.read_text(encoding="utf-8", errors="replace")
